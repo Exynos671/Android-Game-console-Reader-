@@ -1,0 +1,6 @@
+{
+  "name": "Handheld Reader",
+  "description": "An e-reader designed for Android handheld game consoles with custom gamepad button bindings, adaptive 16:9, 3:2, and 4:3 aspect ratios, distraction-free reading, and multi-format support for EPUB, MOBI, PDF, TXT, and comics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

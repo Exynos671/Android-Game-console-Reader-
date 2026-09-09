@@ -8,7 +8,6 @@ import {
   BookOpen,
   Eye,
   Sliders,
-  Sparkles,
   Smartphone,
 } from 'lucide-react';
 import { ReaderSettings, ReaderTheme, ReadingMode } from '../types';
@@ -35,38 +34,38 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
   const themes: { id: ReaderTheme; label: string; bg: string; text: string; desc: string }[] = [
     {
       id: 'oled',
-      label: 'OLED Black',
+      label: 'OLED 纯黑',
       bg: 'bg-black border-neutral-700',
       text: 'text-neutral-200',
-      desc: 'True #000000 for max handheld battery life',
+      desc: '纯黑像素关闭，掌机/手机极度省电',
     },
     {
       id: 'dark',
-      label: 'Dark Slate',
+      label: '暗夜深灰',
       bg: 'bg-neutral-900 border-neutral-700',
       text: 'text-neutral-200',
-      desc: 'Balanced low-glare dark mode',
+      desc: '柔和暗光背景，夜晚久读不刺眼',
     },
     {
       id: 'sepia',
-      label: 'Warm Sepia',
+      label: '护眼羊皮纸',
       bg: 'bg-[#f6ebd7] border-amber-300',
       text: 'text-[#382b1d]',
-      desc: 'Pleasant vintage book page tint',
+      desc: '经典泛黄纸质色调，温润舒适',
     },
     {
       id: 'paper',
-      label: 'Paper Light',
+      label: '水墨浅白',
       bg: 'bg-[#fcfbf9] border-neutral-300',
       text: 'text-[#18181b]',
-      desc: 'High-contrast e-ink newspaper aesthetic',
+      desc: '模拟电纸书高清晰度质感',
     },
     {
       id: 'retro',
-      label: 'Game Boy',
+      label: '复古点阵绿',
       bg: 'bg-[#182818] border-emerald-800',
       text: 'text-[#88c070]',
-      desc: 'Classic handheld 8-bit phosphor matrix',
+      desc: '经典 Game Boy 复古液晶点阵',
     },
   ];
 
@@ -77,7 +76,7 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
         <div className="p-4 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/60 sticky top-0 z-10">
           <div className="flex items-center gap-2">
             <Sliders className="w-5 h-5 text-amber-400" />
-            <h3 className="font-bold text-sm">Reading Environment</h3>
+            <h3 className="font-bold text-sm">阅读与排版设置</h3>
           </div>
           <button
             onClick={onClose}
@@ -92,7 +91,7 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
           <div className="space-y-2.5">
             <label className="text-xs font-semibold text-neutral-400 flex items-center gap-1.5">
               <Moon className="w-3.5 h-3.5 text-amber-400" />
-              Theme &amp; OLED Battery Saver
+              阅读配色与 OLED 省电
             </label>
             <div className="grid grid-cols-2 gap-2">
               {themes.map((t) => (
@@ -118,7 +117,7 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
           <div className="space-y-2.5">
             <label className="text-xs font-semibold text-neutral-400 flex items-center gap-1.5">
               <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-              Reading Layout Mode
+              排版阅读模式
             </label>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -129,8 +128,8 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
                     : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:border-neutral-700'
                 }`}
               >
-                <div>Paginated</div>
-                <div className="text-[10px] opacity-80 mt-0.5">Turn page by page (RB/LB)</div>
+                <div>分页模式</div>
+                <div className="text-[10px] opacity-80 mt-0.5">按键/触屏逐页切换</div>
               </button>
 
               <button
@@ -141,8 +140,8 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
                     : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:border-neutral-700'
                 }`}
               >
-                <div>Continuous Scroll</div>
-                <div className="text-[10px] opacity-80 mt-0.5">Smooth thumbstick scroll</div>
+                <div>连续滚动</div>
+                <div className="text-[10px] opacity-80 mt-0.5">摇杆或滑动平滑上下漫游</div>
               </button>
 
               {isComic && (
@@ -155,8 +154,8 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
                         : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:border-neutral-700'
                     }`}
                   >
-                    <div>Manga (RTL)</div>
-                    <div className="text-[10px] opacity-80 mt-0.5">Right-to-left flip</div>
+                    <div>日漫从右至左</div>
+                    <div className="text-[10px] opacity-80 mt-0.5">符合日系漫画阅读习惯</div>
                   </button>
 
                   <button
@@ -167,8 +166,8 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
                         : 'bg-neutral-950 text-neutral-300 border-neutral-800 hover:border-neutral-700'
                     }`}
                   >
-                    <div>Webtoon Vertical</div>
-                    <div className="text-[10px] opacity-80 mt-0.5">Seamless strip reading</div>
+                    <div>条漫长图向下</div>
+                    <div className="text-[10px] opacity-80 mt-0.5">韩漫/国漫条漫纵向连贯</div>
                   </button>
                 </>
               )}
@@ -181,14 +180,14 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               <div className="space-y-2.5">
                 <label className="text-xs font-semibold text-neutral-400 flex items-center gap-1.5">
                   <Type className="w-3.5 h-3.5 text-amber-400" />
-                  Font Style
+                  正文字形风格
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'serif', label: 'Literata (Serif)' },
-                    { id: 'sans', label: 'Plus Jakarta (Sans)' },
-                    { id: 'mono', label: 'JetBrains (Mono)' },
-                    { id: 'display', label: 'Cinzel (Display)' },
+                    { id: 'serif', label: '人文宋体 (Serif)' },
+                    { id: 'sans', label: '现代黑体 (Sans)' },
+                    { id: 'mono', label: '等宽极客 (Mono)' },
+                    { id: 'display', label: '典雅标题 (Display)' },
                   ].map((f) => (
                     <button
                       key={f.id}
@@ -208,7 +207,7 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               {/* Font Size */}
               <div className="space-y-2">
                 <div className="flex justify-between text-xs text-neutral-400">
-                  <span>Font Size</span>
+                  <span>文字字号</span>
                   <span className="font-mono text-amber-400 font-bold">{settings.fontSize}px</span>
                 </div>
                 <input
@@ -224,9 +223,9 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               {/* Line Spacing */}
               <div className="space-y-2">
                 <div className="flex justify-between text-xs text-neutral-400">
-                  <span>Line Height</span>
+                  <span>文本行高</span>
                   <span className="font-mono text-amber-400 font-bold">
-                    {settings.lineHeight.toFixed(1)}x
+                    {settings.lineHeight.toFixed(1)} 倍
                   </span>
                 </div>
                 <input
@@ -244,20 +243,24 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-neutral-400 flex items-center gap-1.5">
                   <Columns className="w-3.5 h-3.5 text-amber-400" />
-                  Page Margins
+                  版面内边距
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['compact', 'balanced', 'relaxed'] as const).map((m) => (
+                  {[
+                    { id: 'compact', label: '紧凑' },
+                    { id: 'balanced', label: '适中' },
+                    { id: 'relaxed', label: '宽裕' },
+                  ].map((m) => (
                     <button
-                      key={m}
-                      onClick={() => onUpdateSettings({ marginSize: m })}
-                      className={`py-1.5 text-xs font-semibold uppercase rounded-lg border capitalize transition-all ${
-                        settings.marginSize === m
+                      key={m.id}
+                      onClick={() => onUpdateSettings({ marginSize: m.id as any })}
+                      className={`py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                        settings.marginSize === m.id
                           ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
                           : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white'
                       }`}
                     >
-                      {m}
+                      {m.label}
                     </button>
                   ))}
                 </div>
@@ -270,7 +273,7 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
             <div className="flex justify-between text-xs text-neutral-400">
               <span className="flex items-center gap-1.5">
                 <Sun className="w-3.5 h-3.5 text-amber-400" />
-                Night Eye Warmth Filter
+                夜间防蓝光暖色滤镜
               </span>
               <span className="font-mono text-amber-400 font-bold">{settings.warmth}%</span>
             </div>
@@ -289,7 +292,7 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
             <div className="flex justify-between text-xs text-neutral-400">
               <span className="flex items-center gap-1.5">
                 <Eye className="w-3.5 h-3.5 text-amber-400" />
-                Console Brightness Damper
+                掌机暗光亮度衰减器
               </span>
               <span className="font-mono text-amber-400 font-bold">{settings.brightness}%</span>
             </div>
@@ -315,7 +318,7 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               >
                 <div className="flex items-center gap-2">
                   <Smartphone className="w-4 h-4 text-amber-400" />
-                  <span>Install on Android Device</span>
+                  <span>安装至安卓手机 / 掌机</span>
                 </div>
                 <span className="text-[10px] font-mono text-neutral-400">PWA / APK →</span>
               </button>
@@ -329,7 +332,7 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
             onClick={onClose}
             className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-md transition-colors"
           >
-            Apply &amp; Return to Reading
+            保存并返回阅读
           </button>
         </div>
       </div>

@@ -52,6 +52,10 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [hudVisible, setHudVisible] = useState(!settings.distractionFree);
   const hudTimeoutRef = useRef<number | null>(null);
 
+  // Touch gesture support for mobile phones
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+
   // Comic Zoom state
   const [comicZoom, setComicZoom] = useState(1);
 
@@ -189,19 +193,23 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const marginClass = useMemo(() => {
     switch (settings.marginSize) {
       case 'compact':
-        return 'px-4 py-4 max-w-2xl';
+        return 'px-3 sm:px-4 py-3 sm:py-4 max-w-2xl';
       case 'balanced':
-        return 'px-8 py-6 max-w-3xl';
+        return 'px-4 sm:px-8 py-4 sm:py-6 max-w-3xl';
       case 'relaxed':
-        return 'px-12 py-8 max-w-4xl';
+        return 'px-6 sm:px-12 py-6 sm:py-8 max-w-4xl';
       default:
-        return 'px-6 py-6 max-w-3xl';
+        return 'px-4 sm:px-6 py-4 sm:py-6 max-w-3xl';
     }
   }, [settings.marginSize]);
 
   // Aspect ratio styling
   const getAspectContainerClass = (ratio: AspectRatio) => {
     switch (ratio) {
+      case '9:16':
+        return 'aspect-[9/16] max-h-full max-w-full w-auto';
+      case '9:20':
+        return 'aspect-[9/20] max-h-full max-w-full w-auto';
       case '16:9':
         return 'aspect-video max-h-full max-w-full w-auto';
       case '3:2':
@@ -215,6 +223,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         return 'w-full h-full';
     }
   };
+
+  const isPortraitRatio = settings.aspectRatio === '9:16' || settings.aspectRatio === '9:20';
 
   const currentChapter = book.chapters?.[book.currentChapterIndex];
   const currentComicPage = book.comicPages?.[book.currentPage - 1];
@@ -233,12 +243,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       <div
         className={`relative flex flex-col items-center justify-center w-full h-full max-h-full ${
           settings.screenBezelPreview
-            ? 'p-6 sm:p-10 rounded-[40px] bg-gradient-to-b from-neutral-800 to-neutral-900 border-4 border-neutral-700 shadow-[0_25px_60px_rgba(0,0,0,0.8)]'
+            ? 'p-4 sm:p-8 rounded-[36px] bg-gradient-to-b from-neutral-800 to-neutral-900 border-4 border-neutral-700 shadow-[0_25px_60px_rgba(0,0,0,0.8)]'
             : ''
         }`}
       >
-        {/* Decorative Handheld Console Bumpers & Speaker Grille */}
-        {settings.screenBezelPreview && (
+        {/* Decorative Handheld Console Bumpers & Speaker Grille (Hidden in vertical phone mode) */}
+        {settings.screenBezelPreview && !isPortraitRatio && (
           <>
             <div className="absolute top-2 left-10 flex items-center gap-1">
               <span className="px-3 py-0.5 rounded-t-lg bg-neutral-700 text-[10px] font-mono font-bold text-neutral-400 border-t border-x border-neutral-600">
@@ -313,41 +323,41 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 : 'opacity-0 -translate-y-full pointer-events-none'
             }`}
           >
-            <div className="flex items-center justify-between px-4 py-2.5 bg-neutral-950/90 backdrop-blur border-b border-neutral-800 text-neutral-100 text-xs">
-              <div className="flex items-center gap-2 truncate">
+            <div className="flex items-center justify-between px-3 sm:px-4 py-2 bg-neutral-950/90 backdrop-blur border-b border-neutral-800 text-neutral-100 text-xs">
+              <div className="flex items-center gap-1.5 sm:gap-2 truncate">
                 <button
                   onClick={onBackToLibrary}
-                  className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-300 hover:text-white flex items-center gap-1"
-                  title="Back to Library (B / Esc)"
+                  className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-300 hover:text-white flex items-center gap-1 shrink-0"
+                  title="返回书库 (B 键 / Esc)"
                 >
                   <Home className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Library</span>
+                  <span className="hidden sm:inline">书库</span>
                 </button>
 
-                <span className="font-bold truncate max-w-[140px] sm:max-w-xs">{book.title}</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 uppercase">
+                <span className="font-bold truncate max-w-[120px] sm:max-w-xs">{book.title}</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 uppercase shrink-0">
                   {book.format}
                 </span>
               </div>
 
-              {/* Center Gamepad hint pills */}
+              {/* Center Gamepad hint pills (desktop/landscape only) */}
               <div className="hidden md:flex items-center gap-2 font-mono text-[11px] text-neutral-400">
                 <span className="flex items-center gap-1">
                   <GamepadButtonBadge inputId={profile.bindings.prevPage} size="sm" />
-                  <span>Prev</span>
+                  <span>上一页</span>
                 </span>
                 <span className="flex items-center gap-1">
                   <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
-                  <span>Next</span>
+                  <span>下一页</span>
                 </span>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={onOpenToc}
                   className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-300 hover:text-white"
-                  title="Table of Contents (T / Select)"
+                  title="目录与书签 (T 键 / Select)"
                 >
                   <List className="w-3.5 h-3.5" />
                 </button>
@@ -359,7 +369,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
                       : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:text-white'
                   }`}
-                  title="Bookmark Current Section"
+                  title="添加/移除当前页书签"
                 >
                   <Bookmark className="w-3.5 h-3.5" fill={isBookmarked ? 'currentColor' : 'none'} />
                 </button>
@@ -367,47 +377,64 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 <button
                   onClick={onOpenControllerModal}
                   className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                  title="Gamepad Button Mapping"
+                  title="手柄按键自定义映射"
                 >
                   <Gamepad2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline font-mono text-[11px]">Binds</span>
+                  <span className="hidden sm:inline font-mono text-[11px]">映射</span>
                 </button>
 
                 <button
                   onClick={onOpenSettings}
                   className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 text-neutral-300 hover:text-white"
-                  title="Font & Theme Settings (M / Start)"
+                  title="字体与排版设置 (M 键 / Start)"
                 >
                   <Sliders className="w-3.5 h-3.5" />
                 </button>
 
                 <button
                   onClick={onToggleDistractionFree}
-                  className="p-1.5 rounded-lg bg-amber-500 text-neutral-950 font-bold hover:bg-amber-400 flex items-center gap-1"
-                  title="Distraction-Free Mode (Y / Space)"
+                  className="p-1.5 rounded-lg bg-amber-500 text-neutral-950 font-bold hover:bg-amber-400 flex items-center gap-1 shrink-0"
+                  title="进入沉浸无干扰模式 (Y 键 / 空格)"
                 >
                   <Maximize className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline text-[11px]">Distraction-Free</span>
+                  <span className="hidden sm:inline text-[11px]">沉浸阅读</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Reading Canvas Area */}
+          {/* Reading Canvas Area with Touch Gestures & Tap Zones */}
           <div
             ref={contentContainerRef}
             className={`w-full h-full overflow-y-auto no-scrollbar relative flex flex-col items-center ${themeClass} ${
-              hudVisible && !settings.distractionFree ? 'pt-12 pb-14' : 'pt-0 pb-0'
+              hudVisible && !settings.distractionFree ? 'pt-12 pb-14' : 'pt-2 pb-2'
             }`}
+            onTouchStart={(e) => {
+              touchStartX.current = e.changedTouches[0].screenX;
+              touchStartY.current = e.changedTouches[0].screenY;
+            }}
+            onTouchEnd={(e) => {
+              const diffX = e.changedTouches[0].screenX - touchStartX.current;
+              const diffY = e.changedTouches[0].screenY - touchStartY.current;
+
+              // Horizontal swipe detected (threshold 50px)
+              if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+                if (diffX < 0) {
+                  goToNextPage();
+                } else {
+                  goToPrevPage();
+                }
+              }
+            }}
             onClick={(e) => {
               // Tap zones: left 25% = prev, right 25% = next, center 50% = toggle HUD
               const rect = e.currentTarget.getBoundingClientRect();
               const clickX = e.clientX - rect.left;
               const width = rect.width;
 
-              if (clickX < width * 0.22) {
+              if (clickX < width * 0.25) {
                 goToPrevPage();
-              } else if (clickX > width * 0.78) {
+              } else if (clickX > width * 0.75) {
                 goToNextPage();
               } else {
                 triggerHudPeek();
@@ -424,7 +451,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                       <div key={page.pageNumber} className="w-full relative shadow-md">
                         <img
                           src={page.imageUrl}
-                          alt={page.title || `Page ${page.pageNumber}`}
+                          alt={page.title || `第 ${page.pageNumber} 页`}
                           className="w-full h-auto object-contain rounded select-none"
                           loading="lazy"
                         />
@@ -437,7 +464,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                     {currentComicPage && (
                       <img
                         src={currentComicPage.imageUrl}
-                        alt={`Page ${book.currentPage}`}
+                        alt={`第 ${book.currentPage} 页`}
                         className="max-h-full max-w-full object-contain rounded shadow-lg transition-transform duration-200"
                         style={{ transform: `scale(${comicZoom})` }}
                       />
@@ -458,8 +485,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 {currentChapter && (
                   <div className="mb-6 pb-4 border-b border-neutral-700/30">
                     <div className="flex items-center justify-between text-xs opacity-60 font-mono mb-1">
-                      <span>SECTION {book.currentChapterIndex + 1} OF {totalItems}</span>
-                      {isBookmarked && <span className="text-amber-400 font-bold">★ BOOKMARKED</span>}
+                      <span>第 {book.currentChapterIndex + 1} 节 / 共 {totalItems} 节</span>
+                      {isBookmarked && <span className="text-amber-400 font-bold">★ 已添加书签</span>}
                     </div>
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
                       {currentChapter.title}
@@ -479,7 +506,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                 <div className="mt-12 pt-6 border-t border-neutral-700/30 flex items-center justify-between text-xs opacity-60">
                   <span>{book.title}</span>
                   <div className="flex items-center gap-2 font-mono">
-                    <span>Next:</span>
+                    <span>翻至下节:</span>
                     <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
                   </div>
                 </div>
@@ -489,24 +516,24 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
           {/* Bottom Floating Minimal Bar (when not distraction-free) */}
           {hudVisible && !settings.distractionFree && (
-            <div className="absolute bottom-0 inset-x-0 z-30 bg-neutral-950/90 backdrop-blur border-t border-neutral-800 px-4 py-2 flex items-center justify-between text-xs text-neutral-300">
+            <div className="absolute bottom-0 inset-x-0 z-30 bg-neutral-950/90 backdrop-blur border-t border-neutral-800 px-3 sm:px-4 py-2 flex items-center justify-between text-xs text-neutral-300">
               <button
                 onClick={goToPrevPage}
                 disabled={currentItemIndex <= 0}
-                className="flex items-center gap-1 px-2.5 py-1 rounded bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 disabled:opacity-30 disabled:pointer-events-none"
+                className="flex items-center gap-1 px-2 py-1 rounded bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 disabled:opacity-30 disabled:pointer-events-none"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <GamepadButtonBadge inputId={profile.bindings.prevPage} size="sm" />
-                <span className="hidden sm:inline">Prev</span>
+                <span className="hidden sm:inline">上一页</span>
               </button>
 
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-neutral-400">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="font-mono text-[11px] text-neutral-400 whitespace-nowrap">
                   {isComic
-                    ? `Page ${book.currentPage} / ${totalItems}`
-                    : `Section ${book.currentChapterIndex + 1} / ${totalItems}`}
+                    ? `第 ${book.currentPage} / ${totalItems} 页`
+                    : `第 ${book.currentChapterIndex + 1} / ${totalItems} 节`}
                 </span>
-                <div className="w-24 sm:w-36 bg-neutral-800 h-1.5 rounded-full overflow-hidden">
+                <div className="w-16 sm:w-36 bg-neutral-800 h-1.5 rounded-full overflow-hidden">
                   <div
                     className="bg-amber-400 h-full rounded-full transition-all duration-200"
                     style={{ width: `${currentProgressPercent}%` }}
@@ -520,9 +547,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               <button
                 onClick={goToNextPage}
                 disabled={currentItemIndex >= totalItems - 1}
-                className="flex items-center gap-1 px-2.5 py-1 rounded bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 disabled:opacity-30 disabled:pointer-events-none"
+                className="flex items-center gap-1 px-2 py-1 rounded bg-neutral-900 border border-neutral-800 hover:bg-neutral-800 disabled:opacity-30 disabled:pointer-events-none"
               >
-                <span className="hidden sm:inline">Next</span>
+                <span className="hidden sm:inline">下一页</span>
                 <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
                 <ChevronRight className="w-4 h-4" />
               </button>

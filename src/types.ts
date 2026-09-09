@@ -1,6 +1,6 @@
 export type BookFormat = 'txt' | 'epub' | 'pdf' | 'cbz' | 'mobi';
 
-export type AspectRatio = 'native' | '16:9' | '3:2' | '4:3' | '1:1';
+export type AspectRatio = 'native' | '16:9' | '3:2' | '4:3' | '1:1' | '9:16' | '9:20';
 
 export type ReaderTheme = 'oled' | 'dark' | 'sepia' | 'paper' | 'retro';
 

@@ -1,0 +1,104 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type (debug or release)'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Compile Android App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码 (Checkout repository)
+        uses: actions/checkout@v4
+
+      - name: 配置 Node.js 环境 (Setup Node.js 20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 配置 Java JDK 17 (Setup Java 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: 配置 Android SDK 环境 (Setup Android SDK)
+        uses: android-actions/setup-android@v3
+
+      - name: 安装前端依赖 (Install NPM Dependencies)
+        run: |
+          npm install
+
+      - name: 编译 Web 前端资源 (Build Web Distribution)
+        run: |
+          npm run build
+
+      - name: 初始化并同步 Capacitor Android 原生项目 (Capacitor Sync)
+        run: |
+          if [ ! -d "android" ]; then
+            echo "首次生成 Android 原生工程..."
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: 赋予 Gradle 执行权限 (Chmod Gradle)
+        run: |
+          cd android
+          chmod +x gradlew
+
+      - name: 编译 Debug 版 APK (Build Debug APK)
+        if: "${{ github.event.inputs.build_type != 'release' }}"
+        run: |
+          cd android
+          ./gradlew assembleDebug --stacktrace
+
+      - name: 编译 Release 版 APK (Build Release APK)
+        if: "${{ github.event.inputs.build_type == 'release' }}"
+        run: |
+          cd android
+          ./gradlew assembleRelease --stacktrace
+
+      - name: 归档 Debug APK 产物 (Upload Debug APK Artifact)
+        if: "${{ github.event.inputs.build_type != 'release' }}"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Handheld-Reader-Debug-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: 归档 Release APK 产物 (Upload Release APK Artifact)
+        if: "${{ github.event.inputs.build_type == 'release' }}"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Handheld-Reader-Release-APK
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 30
+
+      - name: 发布 Release 附件 (Upload APK to GitHub Release on Tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

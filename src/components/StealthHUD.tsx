@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Battery, BatteryCharging, Clock, EyeOff, Gamepad2, Bookmark, Menu } from 'lucide-react';
+import { Battery, BatteryCharging, Clock, EyeOff, Bookmark, Menu } from 'lucide-react';
 import { GamepadButtonBadge } from './GamepadButtonBadge';
 import { ControllerProfile } from '../types';
 
@@ -87,22 +87,22 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
       }`}
     >
       {/* HUD Container */}
-      <div className="max-w-4xl mx-auto px-4 pb-4">
-        <div className="pointer-events-auto bg-neutral-950/90 backdrop-blur-md border border-neutral-800/90 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 pb-3 sm:pb-4">
+        <div className="pointer-events-auto bg-neutral-950/95 backdrop-blur-md border border-neutral-800/90 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
           {/* Top Row: Title, Chapter, Page Progress & Stats */}
-          <div className="flex items-center justify-between gap-4 text-xs">
+          <div className="flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 truncate">
               <span className="font-bold text-neutral-200 truncate">{bookTitle}</span>
               {currentProgress.chapterTitle && (
                 <>
-                  <span className="text-neutral-600">•</span>
-                  <span className="text-neutral-400 truncate">{currentProgress.chapterTitle}</span>
+                  <span className="text-neutral-600 hidden sm:inline">•</span>
+                  <span className="text-neutral-400 truncate hidden sm:inline">{currentProgress.chapterTitle}</span>
                 </>
               )}
             </div>
 
             {/* System Battery & Time Status for Handhelds */}
-            <div className="flex items-center gap-3 shrink-0 font-mono text-[11px] text-neutral-400">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0 font-mono text-[11px] text-neutral-400">
               {batteryLevel !== null && (
                 <div className="flex items-center gap-1">
                   {isCharging ? (
@@ -122,11 +122,11 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
           </div>
 
           {/* Progress Bar */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={onPrevPage}
               className="p-1 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white"
-              title="Previous Page"
+              title="上一页"
             >
               <GamepadButtonBadge inputId={profile.bindings.prevPage} size="sm" />
             </button>
@@ -140,7 +140,7 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
               </div>
               <div className="flex justify-between text-[10px] font-mono text-neutral-500">
                 <span>
-                  Page {currentProgress.current} of {currentProgress.total}
+                  进度 {currentProgress.current} / {currentProgress.total}
                 </span>
                 <span>{currentProgress.percentage}%</span>
               </div>
@@ -149,7 +149,7 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
             <button
               onClick={onNextPage}
               className="p-1 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white"
-              title="Next Page"
+              title="下一页"
             >
               <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
             </button>
@@ -157,22 +157,22 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
 
           {/* Bottom Action Bar */}
           <div className="flex items-center justify-between pt-1 border-t border-neutral-800/80 text-xs">
-            <div className="flex items-center gap-3 text-[11px] text-neutral-400">
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2 sm:gap-3 text-[11px] text-neutral-400">
+              <div className="flex items-center gap-1">
                 <GamepadButtonBadge inputId={profile.bindings.toggleDistractionFree} size="sm" />
-                <span className="hidden sm:inline">Exit Distraction-Free</span>
+                <span className="hidden md:inline">退出沉浸</span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <GamepadButtonBadge inputId={profile.bindings.toggleMenu} size="sm" />
-                <span className="hidden sm:inline">Menu</span>
+                <span className="hidden md:inline">排版</span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <GamepadButtonBadge inputId={profile.bindings.scrollDown} size="sm" />
-                <span className="hidden sm:inline">Scroll</span>
+                <span className="hidden md:inline">滚动</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <button
                 onClick={onToggleBookmark}
                 className={`p-1.5 rounded-lg border text-xs flex items-center gap-1 transition-colors ${
@@ -180,18 +180,19 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
                     ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
                     : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-neutral-200'
                 }`}
-                title="Bookmark page"
+                title="添加/移除书签"
               >
                 <Bookmark className="w-3.5 h-3.5" fill={isBookmarked ? 'currentColor' : 'none'} />
-                <span className="text-[11px]">Bookmark</span>
+                <span className="text-[11px]">书签</span>
               </button>
 
               <button
                 onClick={onOpenMenu}
                 className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white flex items-center gap-1 text-xs"
+                title="阅读设置"
               >
                 <Menu className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Settings</span>
+                <span className="text-[11px]">设置</span>
               </button>
 
               <button
@@ -199,7 +200,7 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
                 className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs flex items-center gap-1"
               >
                 <EyeOff className="w-3.5 h-3.5" />
-                <span>Exit Fullscreen</span>
+                <span>退出沉浸</span>
               </button>
             </div>
           </div>

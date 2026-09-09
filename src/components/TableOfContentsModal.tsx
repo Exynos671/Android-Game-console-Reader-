@@ -31,27 +31,27 @@ export const TableOfContentsModal: React.FC<TableOfContentsModalProps> = ({
   const itemsCount = isComic ? comicPages!.length : (chapters?.length || 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden text-neutral-100">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/60">
+        <div className="px-4 sm:px-6 py-4 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/60">
           <div className="flex items-center gap-2.5">
             <Book className="w-5 h-5 text-amber-400" />
             <div>
-              <h3 className="font-bold text-base">{isComic ? 'Comic Page Index' : 'Table of Contents'}</h3>
-              <p className="text-xs text-neutral-400 truncate max-w-sm">{title}</p>
+              <h3 className="font-bold text-base">{isComic ? '漫画分卷与分格' : '书籍章节目录'}</h3>
+              <p className="text-xs text-neutral-400 truncate max-w-xs sm:max-w-sm">{title}</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="text-xs font-mono px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300"
           >
-            Close (Esc)
+            关闭 (Esc)
           </button>
         </div>
 
         {/* Content List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-1.5">
           {isComic
             ? comicPages!.map((page, idx) => {
                 const isActive = currentIndex === idx;
@@ -74,7 +74,7 @@ export const TableOfContentsModal: React.FC<TableOfContentsModalProps> = ({
                       <span className="font-mono text-xs px-2 py-0.5 rounded bg-neutral-800 text-neutral-300">
                         {String(page.pageNumber).padStart(2, '0')}
                       </span>
-                      <span className="text-sm font-semibold">{page.title || `Page ${page.pageNumber}`}</span>
+                      <span className="text-sm font-semibold">{page.title || `第 ${page.pageNumber} 页`}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -86,13 +86,13 @@ export const TableOfContentsModal: React.FC<TableOfContentsModalProps> = ({
                         className={`p-1.5 rounded-lg transition-colors ${
                           isBookmarked ? 'text-amber-400' : 'text-neutral-500 hover:text-neutral-300'
                         }`}
-                        title="Bookmark"
+                        title="标记书签"
                       >
                         <Bookmark className="w-4 h-4" fill={isBookmarked ? 'currentColor' : 'none'} />
                       </button>
                       {isActive && (
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-400 text-neutral-950 font-bold">
-                          Current
+                          当前页
                         </span>
                       )}
                     </div>
@@ -124,7 +124,7 @@ export const TableOfContentsModal: React.FC<TableOfContentsModalProps> = ({
                         <span className="text-sm font-semibold">{chap.title}</span>
                         {chap.wordCount && (
                           <span className="block text-[11px] text-neutral-500 mt-0.5">
-                            {chap.wordCount.toLocaleString()} words
+                            约 {chap.wordCount.toLocaleString()} 字
                           </span>
                         )}
                       </div>
@@ -139,13 +139,13 @@ export const TableOfContentsModal: React.FC<TableOfContentsModalProps> = ({
                         className={`p-1.5 rounded-lg transition-colors ${
                           isBookmarked ? 'text-amber-400' : 'text-neutral-500 hover:text-neutral-300'
                         }`}
-                        title="Bookmark"
+                        title="标记书签"
                       >
                         <Bookmark className="w-4 h-4" fill={isBookmarked ? 'currentColor' : 'none'} />
                       </button>
                       {isActive && (
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-400 text-neutral-950 font-bold">
-                          Reading
+                          阅读中
                         </span>
                       )}
                     </div>
@@ -155,9 +155,9 @@ export const TableOfContentsModal: React.FC<TableOfContentsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-neutral-800 bg-neutral-950 text-xs text-neutral-400 flex items-center justify-between">
-          <span>{itemsCount} total sections</span>
-          <span>{bookmarks.length} bookmarks saved</span>
+        <div className="px-4 sm:px-6 py-3 border-t border-neutral-800 bg-neutral-950 text-xs text-neutral-400 flex items-center justify-between">
+          <span>共 {itemsCount} 个小节 / 页面</span>
+          <span>已保存 {bookmarks.length} 个书签</span>
         </div>
       </div>
     </div>

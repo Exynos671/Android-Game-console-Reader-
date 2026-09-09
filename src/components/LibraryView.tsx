@@ -10,14 +10,8 @@ import {
   Plus,
   Gamepad2,
   Bookmark,
-  Sliders,
-  Sparkles,
   Layers,
-  FileText,
-  Image as ImageIcon,
-  CheckCircle2,
-  Tv,
-  Smartphone,
+  Sparkles,
   AlertCircle,
 } from 'lucide-react';
 import { HandheldAspectSwitcher } from './HandheldAspectSwitcher';
@@ -59,10 +53,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const formatFilters: { id: BookFormat | 'all'; label: string }[] = [
-    { id: 'all', label: 'All Formats' },
+    { id: 'all', label: '全部格式' },
     { id: 'epub', label: 'EPUB' },
-    { id: 'cbz', label: 'Comics (CBZ)' },
-    { id: 'txt', label: 'TXT' },
+    { id: 'cbz', label: '漫画 (CBZ)' },
+    { id: 'txt', label: 'TXT 小说' },
     { id: 'pdf', label: 'PDF' },
     { id: 'mobi', label: 'MOBI' },
   ];
@@ -93,21 +87,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         // PDF fallback parser with styled viewer
         const text = await file.text().catch(() => '');
         imported = parseTxt(
-          text || `PDF Document: ${file.name}\n\nThis PDF was indexed for handheld reading.`,
+          text || `PDF 文档: ${file.name}\n\n该 PDF 文档已建立掌机/手机排版索引。`,
           file.name.replace(/\.pdf$/i, ''),
-          'Imported Document'
+          '本地导入文档'
         );
         imported.format = 'pdf';
       } else {
         // Default to text parsing
         const text = await file.text();
-        imported = parseTxt(text, file.name.replace(/\.[^/.]+$/, ''), 'Local Author');
+        imported = parseTxt(text, file.name.replace(/\.[^/.]+$/, ''), '本地书籍');
       }
 
       onImportBook(imported);
     } catch (err: any) {
-      console.error('Failed to import file:', err);
-      setImportError(err.message || 'Could not parse file format.');
+      console.error('导入文件失败:', err);
+      setImportError(err.message || '无法解析所选图书格式。');
     } finally {
       setIsImporting(false);
     }
@@ -131,28 +125,28 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   return (
     <div className="w-full min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
       {/* Top Console Navigation Bar */}
-      <header className="sticky top-0 z-20 bg-neutral-900/90 backdrop-blur border-b border-neutral-800 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <header className="sticky top-0 z-20 bg-neutral-900/90 backdrop-blur border-b border-neutral-800 px-3 sm:px-4 py-2.5">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
           {/* Brand & Console Info */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-bold text-base tracking-tight text-neutral-100">Handheld Reader</h1>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700">
-                  v2.0 Handheld OS
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-bold text-sm sm:text-base tracking-tight text-neutral-100">掌机阅读器</h1>
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700">
+                  v2.0 掌机/手机
                 </span>
               </div>
-              <p className="text-xs text-neutral-400">
-                Odin • Retroid Pocket • Miyoo • RG353 • Steam Deck
+              <p className="text-[11px] text-neutral-400 hidden sm:block">
+                Odin • Retroid Pocket • Miyoo • RG353 • Steam Deck • 安卓手机
               </p>
             </div>
           </div>
 
           {/* Aspect Ratio Switcher */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-w-full overflow-x-auto no-scrollbar py-0.5">
             <HandheldAspectSwitcher
               currentRatio={aspectRatio}
               onChangeRatio={onChangeAspectRatio}
@@ -161,20 +155,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             />
           </div>
 
-          {/* Gamepad Status & Remap Button */}
-          <div className="flex items-center gap-2">
+          {/* Gamepad Status, Install & Import Buttons */}
+          <div className="flex items-center gap-2 ml-auto sm:ml-0">
             <PWAInstallButton onOpenModal={onOpenInstallModal} />
 
             <button
               onClick={onOpenControllerModal}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
                 connectedGamepadName
                   ? 'bg-emerald-950/40 border-emerald-600/60 text-emerald-300 hover:bg-emerald-900/40'
                   : 'bg-neutral-900 border-neutral-700 text-neutral-300 hover:border-neutral-600'
               }`}
             >
               <Gamepad2 className="w-4 h-4 text-amber-400" />
-              <span className="hidden sm:inline">Controller Config</span>
+              <span className="hidden md:inline">手柄设置</span>
               <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
             </button>
 
@@ -196,14 +190,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md transition-colors disabled:opacity-50"
             >
               <Plus className="w-4 h-4" />
-              <span>{isImporting ? 'Importing...' : 'Import Book'}</span>
+              <span>{isImporting ? '导入中...' : '导入图书'}</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
         {/* Banner Alert for Errors */}
         {importError && (
           <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-700/60 text-rose-300 text-xs flex items-center gap-2">
@@ -212,36 +206,36 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
         )}
 
-        {/* Handheld Feature Highlights Pill */}
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-900/90 to-neutral-950 border border-neutral-800 flex flex-wrap items-center justify-between gap-4">
+        {/* Handheld & Phone Feature Highlights Pill */}
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-900/90 to-neutral-950 border border-neutral-800 flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
-            <h2 className="font-bold text-sm text-amber-400 flex items-center gap-2">
+            <h2 className="font-bold text-xs sm:text-sm text-amber-400 flex items-center gap-2">
               <Sparkles className="w-4 h-4" />
-              Tailored for Handheld Game Consoles
+              专为安卓掌机与竖屏智能手机深度优化
             </h2>
             <p className="text-xs text-neutral-400 max-w-2xl">
-              Turn pages smoothly with <strong className="text-neutral-200">RB (Next)</strong> and{' '}
-              <strong className="text-neutral-200">LB (Prev)</strong>, scroll through webtoons with analog thumbsticks, and adapt screen geometry to 16:9, 3:2, or 4:3.
+              支持通过物理肩键 <strong className="text-neutral-200">RB (下一页)</strong> 和{' '}
+              <strong className="text-neutral-200">LB (上一页)</strong> 触觉微振翻页；竖屏手机支持左右单手轻触与滑动手势；适配 9:16/9:20 手机与 16:9/4:3 掌机屏幕。
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-300">
-              <span className="text-neutral-500">Page Turn:</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-300">
+              <span className="text-neutral-500">翻页快捷:</span>
               <GamepadButtonBadge inputId={profile.bindings.prevPage} size="sm" />
               <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
             </div>
 
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-300">
-              <span className="text-neutral-500">Distraction-Free:</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-300 hidden sm:flex">
+              <span className="text-neutral-500">沉浸模式:</span>
               <GamepadButtonBadge inputId={profile.bindings.toggleDistractionFree} size="sm" />
             </div>
           </div>
         </div>
 
         {/* Format Filter Tabs & Dropzone */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 max-w-full">
             {formatFilters.map((fmt) => (
               <button
                 key={fmt.id}
@@ -258,12 +252,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
 
           <div className="text-xs text-neutral-500 font-mono">
-            {filteredBooks.length} titles available
+            共 {filteredBooks.length} 部图书
           </div>
         </div>
 
         {/* Books Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4">
           {filteredBooks.map((book) => {
             const isComic = book.format === 'cbz';
             const total = isComic
@@ -276,11 +270,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               <div
                 key={book.id}
                 onClick={() => onSelectBook(book)}
-                className="group relative bg-neutral-900/70 hover:bg-neutral-850 border border-neutral-800 hover:border-amber-500/60 rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition-all duration-200 shadow-lg hover:shadow-[0_8px_30px_rgba(245,158,11,0.12)]"
+                className="group relative bg-neutral-900/70 hover:bg-neutral-850 border border-neutral-800 hover:border-amber-500/60 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between cursor-pointer transition-all duration-200 shadow-lg hover:shadow-[0_8px_30px_rgba(245,158,11,0.12)]"
               >
                 {/* Book Card Top: Format Badge & Bookmarks */}
                 <div>
-                  <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex items-start justify-between gap-2 mb-2.5">
                     <span
                       className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md border ${getFormatBadge(
                         book.format
@@ -310,7 +304,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     <div className="w-full h-24 mb-3 rounded-xl bg-gradient-to-br from-neutral-800 to-neutral-950 border border-neutral-800 p-3 flex flex-col justify-between">
                       <Layers className="w-6 h-6 text-amber-400/80" />
                       <div className="text-[10px] font-mono text-neutral-500">
-                        {book.totalChapters || 1} Chapters • {book.fileSize || 'Offline'}
+                        {book.totalChapters || 1} 章节 • {book.fileSize || '离线缓存'}
                       </div>
                     </div>
                   )}
@@ -328,10 +322,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 </div>
 
                 {/* Progress bar and button */}
-                <div className="mt-4 pt-3 border-t border-neutral-800/80 space-y-2">
+                <div className="mt-3.5 pt-3 border-t border-neutral-800/80 space-y-2">
                   <div className="flex justify-between text-[11px] font-mono text-neutral-400">
                     <span>
-                      {isComic ? `Page ${current} / ${total}` : `Section ${current} / ${total}`}
+                      {isComic ? `第 ${current} / ${total} 页` : `第 ${current} / ${total} 节`}
                     </span>
                     <span className="text-amber-400 font-bold">{progress}%</span>
                   </div>
@@ -344,10 +338,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-[10px] text-neutral-500">
-                      Tap or press <GamepadButtonBadge inputId="button_0" size="sm" /> to read
+                      轻触或按 <GamepadButtonBadge inputId="button_0" size="sm" /> 键
                     </span>
                     <span className="text-xs font-semibold text-amber-400 group-hover:translate-x-0.5 transition-transform">
-                      Read →
+                      进入阅读 →
                     </span>
                   </div>
                 </div>
@@ -358,31 +352,31 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       </main>
 
       {/* Handheld Quick Controller Legend Bar */}
-      <footer className="sticky bottom-0 z-20 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 py-2.5 px-4 text-xs font-mono text-neutral-400">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-4 flex-wrap">
-            <span className="flex items-center gap-1.5">
+      <footer className="sticky bottom-0 z-20 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 py-2 px-3 sm:px-4 text-xs font-mono text-neutral-400">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap text-[11px]">
+            <span className="flex items-center gap-1">
               <GamepadButtonBadge inputId={profile.bindings.bookmark} size="sm" />
-              <span>Select Book</span>
+              <span>选择阅读</span>
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1">
               <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
-              <span>Next Page</span>
+              <span>下一页</span>
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1">
               <GamepadButtonBadge inputId={profile.bindings.prevPage} size="sm" />
-              <span>Previous Page</span>
+              <span>上一页</span>
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1">
               <GamepadButtonBadge inputId={profile.bindings.toggleDistractionFree} size="sm" />
-              <span>Distraction-Free</span>
+              <span>沉浸模式</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-neutral-500">
-            <span>Aspect Ratio: {aspectRatio}</span>
+          <div className="flex items-center gap-2 text-[10px] sm:text-[11px] text-neutral-500">
+            <span>屏幕比例: {aspectRatio}</span>
             <span>•</span>
-            <span>OLED Black Battery Preservation Active</span>
+            <span>OLED 纯黑省电驱动中</span>
           </div>
         </div>
       </footer>

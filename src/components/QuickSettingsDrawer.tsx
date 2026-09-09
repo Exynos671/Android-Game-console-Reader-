@@ -9,6 +9,7 @@ import {
   Eye,
   Sliders,
   Sparkles,
+  Smartphone,
 } from 'lucide-react';
 import { ReaderSettings, ReaderTheme, ReadingMode } from '../types';
 
@@ -18,6 +19,7 @@ interface QuickSettingsDrawerProps {
   settings: ReaderSettings;
   onUpdateSettings: (newSettings: Partial<ReaderSettings>) => void;
   isComic?: boolean;
+  onOpenInstallModal?: () => void;
 }
 
 export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
@@ -26,6 +28,7 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
   settings,
   onUpdateSettings,
   isComic = false,
+  onOpenInstallModal,
 }) => {
   if (!isOpen) return null;
 
@@ -299,6 +302,25 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               className="w-full accent-amber-400 bg-neutral-800 rounded-lg cursor-pointer"
             />
           </div>
+
+          {/* Android Device Installation Quick Option */}
+          {onOpenInstallModal && (
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenInstallModal();
+                }}
+                className="w-full py-2 px-3 rounded-xl bg-neutral-950 border border-neutral-800 hover:border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center justify-between transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-amber-400" />
+                  <span>Install on Android Device</span>
+                </div>
+                <span className="text-[10px] font-mono text-neutral-400">PWA / APK →</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

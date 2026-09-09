@@ -13,6 +13,8 @@ import { ReaderView } from './components/ReaderView';
 import { GamepadControllerModal } from './components/GamepadControllerModal';
 import { QuickSettingsDrawer } from './components/QuickSettingsDrawer';
 import { TableOfContentsModal } from './components/TableOfContentsModal';
+import { AndroidInstallModal } from './components/AndroidInstallModal';
+import { OfflineIndicator } from './components/OfflineIndicator';
 
 const SETTINGS_STORAGE_KEY = 'handheld_reader_settings';
 const BOOKS_STORAGE_KEY = 'handheld_reader_books';
@@ -71,6 +73,7 @@ export default function App() {
   const [isControllerModalOpen, setIsControllerModalOpen] = useState(false);
   const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
   const [isTocOpen, setIsTocOpen] = useState(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
 
   // Continuous scroll delta passed down to active reader
   const [scrollDeltaY, setScrollDeltaY] = useState(0);
@@ -275,6 +278,7 @@ export default function App() {
           onToggleBezel={(show) => updateSettings({ screenBezelPreview: show })}
           profile={profile}
           onOpenControllerModal={() => setIsControllerModalOpen(true)}
+          onOpenInstallModal={() => setIsInstallModalOpen(true)}
           connectedGamepadName={connectedGamepadName}
           pressedInputs={pressedInputs}
         />
@@ -304,7 +308,17 @@ export default function App() {
         settings={settings}
         onUpdateSettings={updateSettings}
         isComic={activeBook?.format === 'cbz'}
+        onOpenInstallModal={() => setIsInstallModalOpen(true)}
       />
+
+      {/* Android Device Installation Guide & WebAPK Modal */}
+      <AndroidInstallModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+      />
+
+      {/* Offline Status Toast */}
+      <OfflineIndicator />
 
       {/* Table of Contents Modal */}
       {activeBook && (

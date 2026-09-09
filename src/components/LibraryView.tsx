@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { HandheldAspectSwitcher } from './HandheldAspectSwitcher';
 import { GamepadButtonBadge } from './GamepadButtonBadge';
+import { PWAInstallButton } from './PWAInstallButton';
 import { parseTxt, parseEpub, parseCbz, parseMobi } from '../services/bookParser';
 
 interface LibraryViewProps {
@@ -34,6 +35,7 @@ interface LibraryViewProps {
   onToggleBezel: (show: boolean) => void;
   profile: ControllerProfile;
   onOpenControllerModal: () => void;
+  onOpenInstallModal: () => void;
   connectedGamepadName: string | null;
   pressedInputs: Set<string>;
 }
@@ -48,6 +50,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onToggleBezel,
   profile,
   onOpenControllerModal,
+  onOpenInstallModal,
   connectedGamepadName,
 }) => {
   const [selectedFormat, setSelectedFormat] = useState<BookFormat | 'all'>('all');
@@ -160,6 +163,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
           {/* Gamepad Status & Remap Button */}
           <div className="flex items-center gap-2">
+            <PWAInstallButton onOpenModal={onOpenInstallModal} />
+
             <button
               onClick={onOpenControllerModal}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${

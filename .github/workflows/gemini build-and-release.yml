@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' 
+          node-version: '22' # 升级到 Node.js 22 以满足依赖要求
 
       - name: Install dependencies
         run: npm install

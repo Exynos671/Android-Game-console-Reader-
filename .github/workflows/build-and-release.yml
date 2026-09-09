@@ -1,14 +1,12 @@
-name: Build and Release Android APK
+name: Build and Release Android APK (Capacitor)
 
 on:
-  # 允许在网页端手动触发，并可自定义版本号
   workflow_dispatch:
     inputs:
       version:
         description: '发布版本号 (例如: v1.0.0)'
         required: true
         default: 'v1.0.0'
-  # 当你向仓库推送 v 开头的 tag 时自动触发
   push:
     tags:
       - 'v*'
@@ -17,26 +15,47 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 允许 GitHub Actions 创建 Release 并上传文件
+      contents: write
 
     steps:
-      - name: 检出代码
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 配置 JDK 17 环境
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # 项目使用的 Node 版本
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Web App
+        run: npm run build
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: 'temurin'
-          cache: gradle
+          java-version: '17'
 
-      - name: 赋予 gradlew 执行权限
-        run: chmod +x gradlew
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: 编译 Debug APK
-        run: ./gradlew assembleDebug
+      - name: Add Capacitor Android
+        run: |
+          npm install @capacitor/core @capacitor/android
+          npm install -D @capacitor/cli
+          npx cap init "Handheld Reader" "com.handheld.reader" --web-dir dist
+          npx cap add android
+          npx cap sync android
 
-      - name: 确定发布版本号
+      - name: Build Android APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Determine Version
         id: get_version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -45,12 +64,11 @@ jobs:
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
           fi
 
-      - name: 创建 Release 并上传 APK
+      - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
           name: Release ${{ env.VERSION }}
-          # 自动抓取 app 模块下生成的全部 apk 文件
-          files: app/build/outputs/apk/debug/*.apk
+          files: android/app/build/outputs/apk/debug/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

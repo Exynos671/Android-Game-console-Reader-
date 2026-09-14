@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { WifiOff } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 export const OfflineIndicator: React.FC = () => {
-  const [isOnline, setIsOnline] = useState(
+  const { t } = useI18n();
+  const [isOnline, setIsOnline] = React.useState(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
 
-  useEffect(() => {
+  React.useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
@@ -22,9 +24,15 @@ export const OfflineIndicator: React.FC = () => {
   if (isOnline) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 rounded-xl bg-amber-500/90 backdrop-blur px-3 py-1.5 text-xs font-medium text-neutral-950 shadow-xl border border-amber-400/50">
+    <div
+      className="fixed left-4 z-50 flex items-center gap-2 rounded-xl bg-amber-500/90 backdrop-blur px-3 py-1.5 text-xs font-medium text-neutral-950 shadow-xl border border-amber-400/50"
+      style={{
+        bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+        left: 'calc(1rem + env(safe-area-inset-left, 0px))',
+      }}
+    >
       <WifiOff className="w-3.5 h-3.5" />
-      <span>离线模式 — 正在从本地缓存读取书籍</span>
+      <span>{t('offline.mode')}</span>
     </div>
   );
 };

@@ -8,6 +8,91 @@ function naturalSort(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 }
 
+/** Split a book into ~N-word chunks (spaced Latin text). */
+function chunkByWords(text: string, chunkSize: number): Chapter[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const chunks: Chapter[] = [];
+  for (let i = 0; i < words.length; i += chunkSize) {
+    const chunkWords = words.slice(i, i + chunkSize);
+    const idx = Math.floor(i / chunkSize) + 1;
+    chunks.push({
+      id: `chap_${idx}`,
+      title: `Section ${idx}`,
+      content: chunkWords.join(' '),
+      wordCount: chunkWords.length,
+    });
+  }
+  return chunks;
+}
+
+/** Split a book into character-sized chunks at paragraph boundaries. */
+function chunkByChars(text: string, maxCharsPer: number): Chapter[] {
+  const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  const chunks: Chapter[] = [];
+  let buffer: string[] = [];
+  let bufferedChars = 0;
+
+  const flush = () => {
+    if (buffer.length === 0) return;
+    const idx = chunks.length + 1;
+    const content = buffer.join('\n');
+    chunks.push({
+      id: `chap_${idx}`,
+      title: `Section ${idx}`,
+      content,
+      wordCount: Math.max(1, content.length),
+    });
+    buffer = [];
+    bufferedChars = 0;
+  };
+
+  const pushParagraph = (para: string) => {
+    // Very long single paragraphs (rare in plain text) get hard-split at
+    // sentence boundaries so no chunk becomes enormous.
+    if (para.length > maxCharsPer * 1.8) {
+      flush();
+      const sentences = para.split(/(?<=[。！？.!?])\s*/).filter(Boolean);
+      let part: string[] = [];
+      let partLen = 0;
+      for (const sent of sentences) {
+        if (partLen + sent.length > maxCharsPer && part.length) {
+          const idx = chunks.length + 1;
+          const content = part.join('');
+          chunks.push({
+            id: `chap_${idx}`,
+            title: `Section ${idx}`,
+            content,
+            wordCount: Math.max(1, content.length),
+          });
+          part = [];
+          partLen = 0;
+        }
+        part.push(sent);
+        partLen += sent.length;
+      }
+      if (part.length) {
+        const idx = chunks.length + 1;
+        chunks.push({
+          id: `chap_${idx}`,
+          title: `Section ${idx}`,
+          content: part.join(''),
+          wordCount: Math.max(1, part.join('').length),
+        });
+      }
+      return;
+    }
+    if (bufferedChars + para.length > maxCharsPer && buffer.length) {
+      flush();
+    }
+    buffer.push(para);
+    bufferedChars += para.length + 1;
+  };
+
+  for (const line of lines) pushParagraph(line);
+  flush();
+  return chunks;
+}
+
 /**
  * Parse plain text files into chapters
  */
@@ -51,22 +136,17 @@ export function parseTxt(text: string, title = 'Untitled Document', author = 'Un
     });
   }
 
-  // If no chapters detected, split into chunks of ~1200 words
+  // If no chapters detected, split into readable chunks. Latin / spaced text
+  // chunks by words; dense CJK text (little whitespace) chunks by characters
+  // so the whole book never becomes a single unwieldy "section".
   if (chapters.length <= 1) {
-    const words = text.split(/\s+/);
-    const chunkSize = 1000;
-    const fallbackChapters: Chapter[] = [];
-
-    for (let i = 0; i < words.length; i += chunkSize) {
-      const chunkWords = words.slice(i, i + chunkSize);
-      const chunkIndex = Math.floor(i / chunkSize) + 1;
-      fallbackChapters.push({
-        id: `chap_${chunkIndex}`,
-        title: `Section ${chunkIndex}`,
-        content: chunkWords.join(' '),
-        wordCount: chunkWords.length,
-      });
-    }
+    const tokens = text.split(/\s+/).filter(Boolean).length;
+    const chars = text.length;
+    const spaceRatio = tokens / Math.max(1, chars);
+    const fallbackChapters =
+      spaceRatio < 0.25
+        ? chunkByChars(text, 1400)
+        : chunkByWords(text, 1000);
 
     return {
       id: `txt_${Date.now()}`,
@@ -218,8 +298,12 @@ export async function parseEpub(fileData: ArrayBuffer | Blob, fallbackTitle = 'E
       if (imgFile) {
         const blob = await imgFile.async('blob');
         const url = URL.createObjectURL(blob);
+        const decodedHref = safeDecodeURI(item.href);
         imageBlobMap[item.href] = url;
         imageBlobMap[fullImgPath] = url;
+        imageBlobMap[decodedHref] = url;
+        imageBlobMap[safeDecodeURI(fullImgPath)] = url;
+        imageBlobMap[normalizePath(opfDir + decodedHref)] = url;
       }
     }
   }
@@ -239,7 +323,7 @@ export async function parseEpub(fileData: ArrayBuffer | Blob, fallbackTitle = 'E
 
   // Spine reading order
   const spineItems = Array.from(opfDoc.querySelectorAll('spine > itemref'));
-  const chapters: Chapter[] = [];
+  const rawChapters: { title: string; content: string; imageOnly: boolean }[] = [];
 
   for (let i = 0; i < spineItems.length; i++) {
     const idref = spineItems[i].getAttribute('idref');
@@ -255,10 +339,21 @@ export async function parseEpub(fileData: ArrayBuffer | Blob, fallbackTitle = 'E
       // Resolve relative images in HTML
       const chapterDir = chapterPath.includes('/') ? chapterPath.substring(0, chapterPath.lastIndexOf('/') + 1) : '';
 
-      // Replace img src with blob URLs
+      // Replace img src with blob URLs (robust to URL-encoding and ../ hops)
       rawHtml = rawHtml.replace(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi, (imgTag, src) => {
-        const normalizedSrc = normalizePath(chapterDir + src);
-        const replacement = imageBlobMap[src] || imageBlobMap[normalizedSrc];
+        const candidates = [
+          src,
+          normalizePath(chapterDir + src),
+          safeDecodeURI(src),
+          normalizePath(chapterDir + safeDecodeURI(src)),
+        ];
+        let replacement = '';
+        for (const c of candidates) {
+          if (imageBlobMap[c]) {
+            replacement = imageBlobMap[c];
+            break;
+          }
+        }
         if (replacement) {
           return imgTag.replace(src, replacement);
         }
@@ -268,17 +363,56 @@ export async function parseEpub(fileData: ArrayBuffer | Blob, fallbackTitle = 'E
       // Extract Chapter Title
       const chapDoc = parser.parseFromString(rawHtml, 'text/html');
       const hTitle =
-        chapDoc.querySelector('h1, h2, h3, title')?.textContent?.trim() || `Chapter ${chapters.length + 1}`;
+        chapDoc.querySelector('h1, h2, h3, title')?.textContent?.trim() ||
+        `Chapter ${rawChapters.length + 1}`;
 
-      // Extract Clean Body HTML
-      const bodyContent = chapDoc.body?.innerHTML || rawHtml;
+      // Extract Clean Body HTML, then normalise it for reflow: drop EPUB
+      // stylesheets, scripts and inline layout overrides so text and images
+      // obey the app's page-by-page engine instead of fixed book CSS.
+      const bodyContent = sanitizeChapterHtml(chapDoc.body?.innerHTML || rawHtml);
 
       if (bodyContent.trim().length > 10) {
-        chapters.push({
-          id: `epub_chap_${i + 1}`,
-          title: hTitle,
-          content: bodyContent,
-        });
+        // A spine item that is only an illustration (typical cover / plate
+        // page) must not become its own chapter in the table of contents.
+        const textOnly = bodyContent
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const imageOnly = /<img[\s>]/i.test(bodyContent) && textOnly.length < 24;
+        rawChapters.push({ title: hTitle, content: bodyContent, imageOnly });
+      }
+    }
+  }
+
+  // Merge illustration-only spine items into the neighbouring text chapter so
+  // a single picture never occupies a whole TOC entry. If the book has no text
+  // chapters at all (manga / picture book) every image page is kept.
+  const chapters: Chapter[] = [];
+  const hasTextChapter = rawChapters.some((c) => !c.imageOnly);
+  if (!hasTextChapter) {
+    rawChapters.forEach((c, idx) => {
+      chapters.push({ id: `epub_chap_${idx + 1}`, title: c.title, content: c.content });
+    });
+  } else {
+    let pendingImages = '';
+    for (const c of rawChapters) {
+      if (c.imageOnly) {
+        pendingImages += c.content;
+        continue;
+      }
+      chapters.push({
+        id: `epub_chap_${chapters.length + 1}`,
+        title: c.title,
+        content: pendingImages + c.content,
+      });
+      pendingImages = '';
+    }
+    if (pendingImages) {
+      if (chapters.length) {
+        chapters[chapters.length - 1].content += pendingImages;
+      } else {
+        chapters.push({ id: 'epub_chap_1', title, content: pendingImages });
       }
     }
   }
@@ -434,4 +568,51 @@ function normalizePath(path: string): string {
   }
 
   return stack.join('/');
+}
+
+/** Decode a URI component, returning the input unchanged on failure. */
+function safeDecodeURI(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Normalize an EPUB chapter fragment for the reflowable paged engine.
+ * - removes <style>/<link>/<script>/<meta>/<base> so the book cannot impose
+ *   its own layout, page-breaks or fixed font sizes
+ * - drops inline style/class/width/height attributes that would fight the
+ *   app typography, while keeping semantic tags (p, h1-h6, img, figure…)
+ */
+function sanitizeChapterHtml(html: string): string {
+  if (!html) return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('style, link, script, meta, base, title, head').forEach((el) => el.remove());
+
+  doc.body.querySelectorAll('*').forEach((el) => {
+    if (el instanceof HTMLElement || el instanceof SVGElement) {
+      if (el.hasAttribute('style')) el.removeAttribute('style');
+      if (el.hasAttribute('class')) el.removeAttribute('class');
+      const tag = el.tagName ? el.tagName.toLowerCase() : '';
+      if (tag === 'img' || tag === 'svg' || tag === 'video') {
+        el.removeAttribute('width');
+        el.removeAttribute('height');
+      }
+      // strip any on* event handlers
+      for (const attr of Array.from(el.attributes || [])) {
+        if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+      }
+    }
+  });
+
+  // Empty wrapper paragraphs created by aggressive cleanup.
+  doc.body.querySelectorAll('div:empty, span:empty, p:empty').forEach((el) => {
+    if (!el.textContent?.trim() && !el.querySelector('img,svg,video,br')) {
+      el.remove();
+    }
+  });
+
+  return doc.body.innerHTML || '';
 }

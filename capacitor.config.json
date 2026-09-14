@@ -1,14 +1,21 @@
 {
   "appId": "com.handheld.reader",
-  "appName": "Handheld Reader",
+  "appName": "掌上阅读器 Handheld Reader",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https"
   },
+  "plugins": {
+    "SystemBars": {
+      "hidden": true,
+      "insetsHandling": "css",
+      "style": "DARK"
+    }
+  },
   "android": {
-    "allowMixedContent": true,
+    "allowMixedContent": false,
     "captureInput": true,
-    "webContentsDebuggingEnabled": true
+    "webContentsDebuggingEnabled": false
   }
 }

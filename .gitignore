@@ -1,8 +1,36 @@
+# --- dependencies & build output ---
 node_modules/
 build/
 dist/
 coverage/
-.DS_Store
-*.log
+
+# --- environment ---
 .env*
 !.env.example
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+*.iml
+
+# --- Android / Gradle (generated) ---
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+
+# --- signing secrets: NEVER commit these ---
+Release/*.keystore
+Release/keystore.properties
+*.jks
+
+# --- binary releases are distributed via GitHub Releases, not git ---
+Release/*.apk
+Release/*.apk.sha256

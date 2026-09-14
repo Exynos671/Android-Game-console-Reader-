@@ -1,6 +1,7 @@
 {
-  "name": "Handheld Reader",
-  "description": "An e-reader designed for Android handheld game consoles and portrait mobile phones, featuring gamepad button bindings, adaptive 16:9, 3:2, 4:3, 9:16, 9:20 aspect ratios, distraction-free reading, and multi-format support for EPUB, MOBI, PDF, TXT, and comics.",
+  "name": "掌上阅读器 Handheld Reader",
+  "description": "为安卓掌机优化的电子书阅读器：EPUB/MOBI 重排逐屏阅读、图片预览与保存、手柄双绑定、分类书架、GBA 点阵主题、黑夜/白天模式。An e-reader for Android handheld consoles with reflowed pagination, image preview/save, dual gamepad bindings, categories, GBA pixel theme and night/day mode.",
+  "version": "3.2.0",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

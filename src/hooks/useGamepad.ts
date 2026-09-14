@@ -1,32 +1,63 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ControllerProfile, ReaderAction } from '../types';
+import { ControllerProfile, ReaderAction, BindSlot } from '../types';
 import {
   DEFAULT_PROFILES,
   loadSavedProfile,
   saveProfile,
   triggerHaptic,
-  GAMEPAD_INPUTS,
 } from '../services/gamepadService';
+
+export interface RecordingTarget {
+  action: ReaderAction;
+  slot: BindSlot;
+}
 
 interface UseGamepadOptions {
   onAction?: (action: ReaderAction) => void;
   onScroll?: (deltaY: number) => void;
   enabled?: boolean;
+  /** Called when the user presses a button while recording a binding. */
+  onRecordingPress?: (target: RecordingTarget, inputId: string) => void;
+  /** Called when the user holds down B (button_1) while recording a binding. */
+  onLongPressB?: () => void;
 }
 
-export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOptions = {}) {
+/** Return the action bound (primary or secondary) to a given input. */
+export function actionForInput(prof: ControllerProfile, input: string): ReaderAction | null {
+  for (const [a, id] of Object.entries(prof.bindings)) {
+    if (id === input) return a as ReaderAction;
+  }
+  for (const [a, id] of Object.entries(prof.secondaryBindings || {})) {
+    if (id === input) return a as ReaderAction;
+  }
+  return null;
+}
+
+export function useGamepad({
+  onAction,
+  onScroll,
+  enabled = true,
+  onRecordingPress,
+  onLongPressB,
+}: UseGamepadOptions = {}) {
+  /** How long B must be held while binding to abort + leave the settings. */
+  const B_LONG_PRESS_MS = 700;
   const [profile, setProfileState] = useState<ControllerProfile>(loadSavedProfile);
   const [connectedGamepadName, setConnectedGamepadName] = useState<string | null>(null);
   const [pressedInputs, setPressedInputs] = useState<Set<string>>(new Set());
-  const [recordingAction, setRecordingAction] = useState<ReaderAction | null>(null);
+  const [recordingTarget, setRecordingTarget] = useState<RecordingTarget | null>(null);
 
   const prevButtonsRef = useRef<boolean[]>([]);
   const prevAxesActiveRef = useRef<Record<string, boolean>>({});
   const lastActionTimeRef = useRef<Record<string, number>>({});
   const onActionRef = useRef(onAction);
   const onScrollRef = useRef(onScroll);
+  const onRecordingPressRef = useRef(onRecordingPress);
+  const onLongPressBRef = useRef(onLongPressB);
   const profileRef = useRef(profile);
-  const recordingActionRef = useRef(recordingAction);
+  const recordingTargetRef = useRef(recordingTarget);
+  const bHoldTimerRef = useRef<number | null>(null);
+  const bHoldFiredRef = useRef(false);
 
   useEffect(() => {
     onActionRef.current = onAction;
@@ -37,31 +68,49 @@ export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOpt
   }, [onScroll]);
 
   useEffect(() => {
+    onRecordingPressRef.current = onRecordingPress;
+  }, [onRecordingPress]);
+
+  useEffect(() => {
+    onLongPressBRef.current = onLongPressB;
+  }, [onLongPressB]);
+
+  useEffect(() => {
     profileRef.current = profile;
   }, [profile]);
 
   useEffect(() => {
-    recordingActionRef.current = recordingAction;
-  }, [recordingAction]);
+    recordingTargetRef.current = recordingTarget;
+    if (!recordingTarget && bHoldTimerRef.current) {
+      window.clearTimeout(bHoldTimerRef.current);
+      bHoldTimerRef.current = null;
+    }
+    if (!recordingTarget) bHoldFiredRef.current = false;
+  }, [recordingTarget]);
 
   const updateProfile = useCallback((newProfile: ControllerProfile) => {
     setProfileState(newProfile);
     saveProfile(newProfile);
   }, []);
 
-  const rebindAction = useCallback((action: ReaderAction, inputId: string) => {
-    setProfileState((prev) => {
-      const updated: ControllerProfile = {
-        ...prev,
-        bindings: {
-          ...prev.bindings,
-          [action]: inputId,
-        },
-      };
-      saveProfile(updated);
-      return updated;
-    });
-  }, []);
+  const rebindAction = useCallback(
+    (action: ReaderAction, inputId: string, slot: BindSlot = 'primary') => {
+      setProfileState((prev) => {
+        const updated: ControllerProfile = { ...prev };
+        if (slot === 'secondary') {
+          updated.secondaryBindings = {
+            ...(prev.secondaryBindings || {}),
+            [action]: inputId,
+          };
+        } else {
+          updated.bindings = { ...prev.bindings, [action]: inputId };
+        }
+        saveProfile(updated);
+        return updated;
+      });
+    },
+    []
+  );
 
   // Check Gamepad Loop
   useEffect(() => {
@@ -88,7 +137,15 @@ export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOpt
         const currentlyPressed = new Set<string>();
         const now = performance.now();
         const curProfile = profileRef.current;
-        const currentRecording = recordingActionRef.current;
+        const currentRecording = recordingTargetRef.current;
+
+        const maybeRecord = (inputId: string, haptic: boolean) => {
+          if (currentRecording) {
+            onRecordingPressRef.current?.(currentRecording, inputId);
+            setRecordingTarget(null);
+            if (haptic) triggerHaptic(60, 0.8, 0.4);
+          }
+        };
 
         // 1. Scan Buttons
         activeGamepad.buttons.forEach((btn, idx) => {
@@ -98,19 +155,40 @@ export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOpt
           if (isPressed) {
             currentlyPressed.add(inputId);
 
-            // Check if user is actively recording a binding
             if (currentRecording) {
-              rebindAction(currentRecording, inputId);
-              setRecordingAction(null);
-              triggerHaptic(60, 0.8, 0.4);
-              return;
+              const wasPressed = prevButtonsRef.current[idx];
+              if (inputId === 'button_1') {
+                // B is special while binding: a quick tap records B, holding
+                // it down aborts the recording and exits the settings screen.
+                if (!wasPressed) {
+                  bHoldFiredRef.current = false;
+                  if (bHoldTimerRef.current) window.clearTimeout(bHoldTimerRef.current);
+                  bHoldTimerRef.current = window.setTimeout(() => {
+                    bHoldTimerRef.current = null;
+                    bHoldFiredRef.current = true;
+                    setRecordingTarget(null);
+                    onLongPressBRef.current?.();
+                  }, B_LONG_PRESS_MS);
+                }
+              } else if (!wasPressed) {
+                maybeRecord(inputId, true);
+              }
+            } else {
+              const wasPressed = prevButtonsRef.current[idx];
+              if (!wasPressed) {
+                handleInputTrigger(inputId, curProfile, now);
+              }
             }
-
-            const wasPressed = prevButtonsRef.current[idx];
-            if (!wasPressed) {
-              // Single tap trigger
-              handleInputTrigger(inputId, curProfile, now);
-            }
+          } else if (
+            idx === 1 &&
+            prevButtonsRef.current[1] &&
+            currentRecording &&
+            bHoldTimerRef.current
+          ) {
+            // Released before the long-press interval: record B normally.
+            window.clearTimeout(bHoldTimerRef.current);
+            bHoldTimerRef.current = null;
+            if (!bHoldFiredRef.current) maybeRecord('button_1', true);
           }
           prevButtonsRef.current[idx] = isPressed;
         });
@@ -124,45 +202,37 @@ export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOpt
           const negId = `axis_${i}_neg`;
           const posId = `axis_${i}_pos`;
 
-          // Negative tilt
           if (val < -deadzone) {
             currentlyPressed.add(negId);
             if (currentRecording) {
-              rebindAction(currentRecording, negId);
-              setRecordingAction(null);
-              triggerHaptic(60, 0.8, 0.4);
-              return;
-            }
-
-            const wasActive = prevAxesActiveRef.current[negId];
-            if (!wasActive) {
-              handleInputTrigger(negId, curProfile, now);
+              const wasActive = prevAxesActiveRef.current[negId];
+              if (!wasActive) maybeRecord(negId, true);
+            } else {
+              const wasActive = prevAxesActiveRef.current[negId];
+              if (!wasActive) {
+                handleInputTrigger(negId, curProfile, now);
+              }
             }
             prevAxesActiveRef.current[negId] = true;
 
-            // Continuous scroll check for right stick / left stick
             checkContinuousScroll(negId, Math.abs(val), curProfile);
           } else {
             prevAxesActiveRef.current[negId] = false;
           }
 
-          // Positive tilt
           if (val > deadzone) {
             currentlyPressed.add(posId);
             if (currentRecording) {
-              rebindAction(currentRecording, posId);
-              setRecordingAction(null);
-              triggerHaptic(60, 0.8, 0.4);
-              return;
-            }
-
-            const wasActive = prevAxesActiveRef.current[posId];
-            if (!wasActive) {
-              handleInputTrigger(posId, curProfile, now);
+              const wasActive = prevAxesActiveRef.current[posId];
+              if (!wasActive) maybeRecord(posId, true);
+            } else {
+              const wasActive = prevAxesActiveRef.current[posId];
+              if (!wasActive) {
+                handleInputTrigger(posId, curProfile, now);
+              }
             }
             prevAxesActiveRef.current[posId] = true;
 
-            // Continuous scroll check
             checkContinuousScroll(posId, Math.abs(val), curProfile);
           } else {
             prevAxesActiveRef.current[posId] = false;
@@ -183,22 +253,17 @@ export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOpt
     const handleInputTrigger = (inputId: string, prof: ControllerProfile, now: number) => {
       if (!enabled) return;
 
-      // Find which action corresponds to this inputId
-      for (const [action, mappedInput] of Object.entries(prof.bindings) as [ReaderAction, string][]) {
-        if (mappedInput === inputId) {
-          // Debounce rapid repeat for discrete page turns
-          const lastTime = lastActionTimeRef.current[action] || 0;
-          const minInterval = action === 'nextPage' || action === 'prevPage' ? 220 : 150;
+      const action = actionForInput(prof, inputId);
+      if (!action) return;
 
-          if (now - lastTime >= minInterval) {
-            lastActionTimeRef.current[action] = now;
-            if (prof.hapticFeedback) {
-              triggerHaptic(30, 0.3, 0.1);
-            }
-            onActionRef.current?.(action);
-          }
-          break;
+      const lastTime = lastActionTimeRef.current[action] || 0;
+      const minInterval = action === 'nextPage' || action === 'prevPage' ? 220 : 150;
+      if (now - lastTime >= minInterval) {
+        lastActionTimeRef.current[action] = now;
+        if (prof.hapticFeedback) {
+          triggerHaptic(30, 0.3, 0.1);
         }
+        onActionRef.current?.(action);
       }
     };
 
@@ -207,9 +272,9 @@ export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOpt
       const speed = prof.scrollSpeed || 14;
       const invert = prof.invertScroll ? -1 : 1;
 
-      if (prof.bindings.scrollDown === inputId) {
+      if (prof.bindings.scrollDown === inputId || prof.secondaryBindings?.scrollDown === inputId) {
         onScrollRef.current?.(speed * magnitude * invert);
-      } else if (prof.bindings.scrollUp === inputId) {
+      } else if (prof.bindings.scrollUp === inputId || prof.secondaryBindings?.scrollUp === inputId) {
         onScrollRef.current?.(-speed * magnitude * invert);
       }
     };
@@ -231,9 +296,14 @@ export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOpt
 
     return () => {
       cancelAnimationFrame(animFrameId);
+      if (bHoldTimerRef.current) {
+        window.clearTimeout(bHoldTimerRef.current);
+        bHoldTimerRef.current = null;
+      }
       window.removeEventListener('gamepadconnected', onGamepadConnect);
       window.removeEventListener('gamepaddisconnected', onGamepadDisconnect);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, rebindAction]);
 
   // Keyboard support as fallback / simulation
@@ -241,7 +311,6 @@ export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOpt
     if (!enabled) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if user is typing in an input
       if (
         document.activeElement instanceof HTMLInputElement ||
         document.activeElement instanceof HTMLTextAreaElement
@@ -303,8 +372,8 @@ export function useGamepad({ onAction, onScroll, enabled = true }: UseGamepadOpt
     connectedGamepadName,
     isGamepadConnected: Boolean(connectedGamepadName),
     pressedInputs,
-    recordingAction,
-    setRecordingAction,
+    recordingTarget,
+    setRecordingTarget,
     presetProfiles: DEFAULT_PROFILES,
   };
 }

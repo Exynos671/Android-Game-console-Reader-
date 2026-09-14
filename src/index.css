@@ -1,1 +1,447 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source "../src/**/*.{ts,tsx}";
+@source "../index.html";
+
+/* ============================================================
+   Android / mobile full-viewport & safe-area adaptation
+   env(safe-area-inset-*) returns 0 on desktop browsers and
+   real inset values when the WebView runs edge-to-edge on
+   devices with a status bar, gesture navigation bar or notch.
+   ============================================================ */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  background: #090a0f;
+}
+
+body {
+  margin: 0;
+  background: #090a0f;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  /* Keep the app inside the visual viewport on Android WebView */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+}
+
+/* Font stacks with CJK fallbacks so Chinese text renders nicely in both
+   the serif (book) and sans (chrome) families. */
+.font-sans,
+body {
+  font-family: 'Plus Jakarta Sans', 'Noto Sans SC', 'PingFang SC',
+    'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+}
+.font-serif {
+  font-family: Georgia, 'Noto Serif SC', 'Songti SC', 'SimSun', 'Times New Roman', serif;
+}
+.font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, 'Courier New', monospace;
+}
+.font-display {
+  font-family: 'Cinzel', 'Noto Serif SC', serif;
+}
+/* Dot-matrix (点阵) reading fonts */
+@font-face {
+  font-family: 'HanYi Pixel 11';
+  src: url('../Fonts/汉仪像素11px.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+.font-pixel1 {
+  font-family: 'Press Start 2P', 'Silkscreen', 'Noto Sans SC', 'Microsoft YaHei', monospace;
+  letter-spacing: 0.02em;
+}
+.font-pixel2 {
+  font-family: 'Silkscreen', 'Press Start 2P', 'Noto Sans SC', 'Microsoft YaHei', monospace;
+  letter-spacing: 0.02em;
+}
+/* Chinese pixel face used by the GBA theme by default */
+.font-gba {
+  font-family: 'HanYi Pixel 11', 'Silkscreen', 'Press Start 2P', 'Noto Sans SC', monospace;
+  letter-spacing: 0.02em;
+}
+
+/* Safe-area helper utilities.
+   Handhelds such as the Konkr Pocket Advance report no insets, so a generous
+   base margin is always added on top of the real safe-area value. This keeps
+   the chrome away from the physical screen border. */
+.safe-pt {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+}
+.safe-pb {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+.safe-pl {
+  padding-left: calc(env(safe-area-inset-left, 0px) + 1.5rem);
+}
+.safe-pr {
+  padding-right: calc(env(safe-area-inset-right, 0px) + 1.5rem);
+}
+.safe-px {
+  padding-left: calc(env(safe-area-inset-left, 0px) + 1.5rem);
+  padding-right: calc(env(safe-area-inset-right, 0px) + 1.5rem);
+}
+
+/* Bars anchored to the top/bottom of an edge-to-edge screen:
+   background bleeds under the system bars while the inner row
+   is pushed below/above them. */
+.bar-safe-top {
+  padding-top: calc(0.625rem + env(safe-area-inset-top, 0px));
+}
+.bar-safe-bottom {
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Reading canvas reserves room for floating bars only when they
+   are shown; the safe-area inset is always respected so no text
+   or buttons ever hide under the status / navigation bars. */
+.hud-space-top {
+  padding-top: calc(3rem + env(safe-area-inset-top, 0px));
+}
+.hud-space-bottom {
+  padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+}
+.safe-space-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-space-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ============================================================
+   Page-turn animations
+   ============================================================ */
+@keyframes hh-page-slide-next {
+  0% {
+    opacity: 0.25;
+    transform: translateX(7%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes hh-page-slide-prev {
+  0% {
+    opacity: 0.25;
+    transform: translateX(-7%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes hh-page-fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes hh-content-fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+.hh-anim-slide-next {
+  animation: hh-page-slide-next 0.32s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.hh-anim-slide-prev {
+  animation: hh-page-slide-prev 0.32s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.hh-anim-fade {
+  animation: hh-page-fade-in 0.28s ease-out;
+}
+.hh-anim-content {
+  animation: hh-content-fade-in 0.3s ease-out;
+}
+
+/* Paginated text engine helpers (CSS multi-column sheets) */
+.hh-paged-sheet {
+  column-fill: auto;
+  column-gap: 0px;
+  /* transform transition driven from JSX so slide/flip animations
+     can use transition-property: transform only */
+  will-change: transform;
+}
+.hh-paged-sheet.sheet-anim-slide {
+  transition: transform 0.36s cubic-bezier(0.22, 0.75, 0.24, 1);
+}
+.hh-paged-sheet.sheet-anim-instant {
+  transition: none;
+}
+.hh-paged-sheet img,
+.hh-paged-sheet video,
+.hh-paged-sheet figure,
+.hh-paged-sheet table,
+.hh-paged-sheet .break-avoid {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.hh-paged-sheet h1,
+.hh-paged-sheet h2,
+.hh-paged-sheet h3,
+.hh-paged-sheet h4 {
+  break-after: avoid;
+  page-break-after: avoid;
+  margin: 1.1em 0 0.5em;
+  line-height: 1.3;
+}
+.hh-paged-sheet p {
+  margin: 0 0 0.85em;
+}
+.hh-paged-sheet img,
+.hh-paged-sheet video {
+  max-width: 100% !important;
+  /* Keep any single illustration within one page so it never consumes
+     several (mostly empty) columns / page turns. */
+  max-height: var(--hh-page-h, 78vh) !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain;
+}
+.hh-paged-sheet svg {
+  max-width: 100%;
+  height: auto;
+}
+.hh-paged-sheet figure {
+  margin: 0.6em auto;
+  text-align: center;
+}
+.hh-paged-sheet figure img {
+  display: block;
+  margin: 0 auto;
+}
+
+/* Continuous-scroll mode: image display modes (fit vs full width). */
+.hh-cont-img-fit img,
+.hh-cont-img-fit video {
+  display: block;
+  margin: 0.6em auto;
+  max-width: 100%;
+  max-height: 80vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.hh-cont-img-full img,
+.hh-cont-img-full video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 0.6em auto;
+}
+.hh-paged-sheet ul,
+.hh-paged-sheet ol {
+  margin: 0 0 0.85em;
+  padding-left: 1.6em;
+}
+.hh-paged-sheet blockquote {
+  margin: 0.9em 0;
+  padding: 0.4em 1em;
+  border-left: 3px solid rgba(128, 128, 128, 0.4);
+}
+
+/* Improve touch behaviour for tap-zones + swipe page turns */
+.read-canvas {
+  touch-action: pan-y;
+}
+
+/* Non-blocking toast that fades in from the top and stays put while the
+   parent decides to clear it (used for the double-press-B exit hint). */
+@keyframes hh-hint-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+.hh-hint-chip {
+  animation: hh-hint-in 0.22s ease-out both;
+}
+
+/* ============================================================
+   GBA screen theme 鈥?big chunky "LCD" pixel grain overlay
+   ============================================================ */
+.hh-gba-pixels {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background-image:
+    linear-gradient(rgba(15, 56, 15, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 56, 15, 0.16) 1px, transparent 1px);
+  background-size: 2px 2px;
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+.hh-gba-vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 26;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0) 55%,
+    rgba(15, 56, 15, 0.28) 100%
+  );
+  mix-blend-mode: multiply;
+}
+
+/* ============================================================
+   Page-curl (缈讳功鎻) animation helpers 鈥?most motion is inline
+   JS (imperative overlay), these are just the decorative bits.
+   ============================================================ */
+.hh-curl-overlay {
+  will-change: transform, opacity;
+  transform-style: preserve-3d;
+  overflow: hidden;
+  background: transparent;
+}
+.hh-curl-page {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.hh-curl-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to left,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.04) 28%,
+    rgba(0, 0, 0, 0.05) 60%,
+    rgba(0, 0, 0, 0.25)
+  );
+  pointer-events: none;
+}
+
+/* ============================================================
+   Controller / keyboard focus ring used on the home shelf.
+   ============================================================ */
+.hh-focusable {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+.hh-focused {
+  outline-color: rgb(245 158 11);
+  box-shadow: 0 0 0 4px rgb(245 158 11 / 0.28), 0 0 18px rgb(245 158 11 / 0.18);
+}
+
+/* ============================================================
+   Day (light) chrome theme.
+   Scoped to elements OUTSIDE the reading canvas so light/dark
+   book themes inside .read-canvas are never affected.
+   ============================================================ */
+.ui-day .bg-neutral-950:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-neutral-900\/90:not(:where(.read-canvas, .read-canvas *)) {
+  background-color: #f3f0ec !important;
+}
+.ui-day .bg-neutral-900:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-neutral-900\/80:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-neutral-900\/70:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-neutral-900\/60:not(:where(.read-canvas, .read-canvas *)) {
+  background-color: #f7f4f0 !important;
+}
+.ui-day .bg-neutral-800:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-neutral-800\/80:not(:where(.read-canvas, .read-canvas *)) {
+  background-color: #e9e4de !important;
+}
+.ui-day .bg-neutral-950\/90:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-neutral-950\/80:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-neutral-950\/95:not(:where(.read-canvas, .read-canvas *)) {
+  background-color: #eeeae6 !important;
+}
+.ui-day .bg-black\/70:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-black\/80:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-black\/85:not(:where(.read-canvas, .read-canvas *)) {
+  background-color: rgba(60, 56, 50, 0.5) !important;
+}
+.ui-day .border-neutral-800:not(:where(.read-canvas, .read-canvas *)) {
+  border-color: #dcd6cf !important;
+}
+.ui-day .border-neutral-700:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .border-neutral-700\/80:not(:where(.read-canvas, .read-canvas *)) {
+  border-color: #cfc8bf !important;
+}
+.ui-day .border-neutral-600:not(:where(.read-canvas, .read-canvas *)) {
+  border-color: #bdb5ab !important;
+}
+.ui-day .text-neutral-100:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .text-neutral-200:not(:where(.read-canvas, .read-canvas *)) {
+  color: #2a251e !important;
+}
+.ui-day .text-neutral-300:not(:where(.read-canvas, .read-canvas *)) {
+  color: #4d463c !important;
+}
+.ui-day .text-neutral-400:not(:where(.read-canvas, .read-canvas *)) {
+  color: #6d665b !important;
+}
+.ui-day .text-neutral-500:not(:where(.read-canvas, .read-canvas *)) {
+  color: #8a8377 !important;
+}
+.ui-day .text-neutral-600:not(:where(.read-canvas, .read-canvas *)) {
+  color: #979083 !important;
+}
+.ui-day .text-neutral-50:not(:where(.read-canvas, .read-canvas *)) {
+  color: #211d17 !important;
+}
+.ui-day .bg-neutral-950\/70:not(:where(.read-canvas, .read-canvas *)) {
+  background-color: rgba(238, 234, 230, 0.72) !important;
+}
+/* Reading-time top hints should stay legible on both */
+.ui-day .bg-neutral-950\/95:not(:where(.read-canvas, .read-canvas *)),
+.ui-day .bg-neutral-950\/90:not(:where(.read-canvas, .read-canvas *)) {
+  background-color: #f1ede9 !important;
+}
+
+/* ============================================================
+   Night (dark) chrome theme.
+   The default neutral-800 borders are almost invisible on many
+   handheld LCD panels, so brighten them and pin the text colour
+   so night mode always reads as light-on-dark.
+   ============================================================ */
+.ui-night {
+  color: #f4f4f5;
+}
+.ui-night .border-neutral-800:not(:where(.read-canvas, .read-canvas *)),
+.ui-night .border-neutral-800\/80:not(:where(.read-canvas, .read-canvas *)),
+.ui-night .border-neutral-800\/70:not(:where(.read-canvas, .read-canvas *)) {
+  border-color: #52525b !important;
+}
+.ui-night .border-neutral-700:not(:where(.read-canvas, .read-canvas *)),
+.ui-night .border-neutral-700\/80:not(:where(.read-canvas, .read-canvas *)) {
+  border-color: #71717a !important;
+}
+.ui-night .border-neutral-900:not(:where(.read-canvas, .read-canvas *)) {
+  border-color: #3f3f46 !important;
+}
+.ui-night .text-neutral-500:not(:where(.read-canvas, .read-canvas *)),
+.ui-night .text-neutral-600:not(:where(.read-canvas, .read-canvas *)) {
+  color: #a1a1aa !important;
+}
+
+/* ============================================================
+   Focus-zone highlight (LB/RB locks the top bar or the shelf).
+   ============================================================ */
+.hh-zone-lit {
+  background-image: linear-gradient(
+    rgb(245 158 11 / 0.09),
+    rgb(245 158 11 / 0.09)
+  );
+  box-shadow: inset 0 0 0 2px rgb(245 158 11 / 0.4);
+  border-radius: 0.75rem;
+}

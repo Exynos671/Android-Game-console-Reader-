@@ -1,110 +1,273 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
+import { App as NativeApp } from '@capacitor/app';
 import {
   Book,
-  BookFormat,
-  AspectRatio,
+  BookCategory,
   ControllerProfile,
+  UiTheme,
+  BookFormat,
 } from '../types';
 import {
   BookOpen,
   Plus,
   Gamepad2,
   Bookmark,
-  Layers,
-  Sparkles,
+  Languages,
+  HelpCircle,
   AlertCircle,
+  Moon,
+  Sun,
+  SlidersHorizontal,
+  MoreVertical,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
-import { HandheldAspectSwitcher } from './HandheldAspectSwitcher';
 import { GamepadButtonBadge } from './GamepadButtonBadge';
-import { PWAInstallButton } from './PWAInstallButton';
 import { parseTxt, parseEpub, parseCbz, parseMobi } from '../services/bookParser';
+import { saveBookFile } from '../services/bookStore';
+import { BookActionsModal, ShelfManagerModal } from './ShelfModals';
+import { useControllerNav } from '../hooks/useControllerNav';
+import { useI18n } from '../i18n';
 
 interface LibraryViewProps {
   books: Book[];
-  onSelectBook: (book: Book) => void;
-  onImportBook: (book: Book) => void;
-  aspectRatio: AspectRatio;
-  onChangeAspectRatio: (ratio: AspectRatio) => void;
-  showBezel: boolean;
-  onToggleBezel: (show: boolean) => void;
+  removedBooks: Book[];
+  categories: BookCategory[];
+  uiTheme: UiTheme;
   profile: ControllerProfile;
-  onOpenControllerModal: () => void;
-  onOpenInstallModal: () => void;
   connectedGamepadName: string | null;
   pressedInputs: Set<string>;
+  onSelectBook: (book: Book) => void;
+  onImportBooks: (books: Book[]) => void;
+  onOpenControllerModal: () => void;
+  onOpenTutorial: () => void;
+  onToggleUiTheme: () => void;
+  onCreateCategory: (name: string) => void;
+  onRenameCategory: (id: string, name: string) => void;
+  onDeleteCategory: (id: string) => void;
+  onAssignCategory: (bookId: string, categoryId: string) => void;
+  onRemoveBook: (bookId: string) => void;
+  onRestoreBook: (bookId: string) => void;
+  onDeleteBookFile: (bookId: string) => void;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
   books,
-  onSelectBook,
-  onImportBook,
-  aspectRatio,
-  onChangeAspectRatio,
-  showBezel,
-  onToggleBezel,
+  removedBooks,
+  categories,
+  uiTheme,
   profile,
-  onOpenControllerModal,
-  onOpenInstallModal,
   connectedGamepadName,
+  pressedInputs,
+  onSelectBook,
+  onImportBooks,
+  onOpenControllerModal,
+  onOpenTutorial,
+  onToggleUiTheme,
+  onCreateCategory,
+  onRenameCategory,
+  onDeleteCategory,
+  onAssignCategory,
+  onRemoveBook,
+  onRestoreBook,
+  onDeleteBookFile,
 }) => {
-  const [selectedFormat, setSelectedFormat] = useState<BookFormat | 'all'>('all');
+  const { t, tf, lang, setLang } = useI18n();
+  const [filter, setFilter] = useState<{ kind: 'all' } | { kind: 'cat'; id: string }>({
+    kind: 'all',
+  });
   const [isImporting, setIsImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [menuBook, setMenuBook] = useState<Book | null>(null);
+  const [managerOpen, setManagerOpen] = useState(false);
 
-  const formatFilters: { id: BookFormat | 'all'; label: string }[] = [
-    { id: 'all', label: '全部格式' },
-    { id: 'epub', label: 'EPUB' },
-    { id: 'cbz', label: '漫画 (CBZ)' },
-    { id: 'txt', label: 'TXT 小说' },
-    { id: 'pdf', label: 'PDF' },
-    { id: 'mobi', label: 'MOBI' },
-  ];
+  // Fullscreen single-book carousel state.
+  const [index, setIndex] = useState(0);
+  const [dir, setDir] = useState(1);
+
+  // Triple-press B exit hint.
+  const backCountRef = useRef(0);
+  const backTimerRef = useRef<number | null>(null);
+  const [exitHint, setExitHint] = useState<{ count: number; visible: boolean } | null>(null);
+
+  const modalOpen = menuBook !== null || managerOpen;
 
   const filteredBooks = books.filter((b) => {
-    if (selectedFormat === 'all') return true;
-    return b.format === selectedFormat;
+    if (filter.kind === 'all') return true;
+    return (b.categoryId || '') === filter.id;
   });
 
-  const handleFileUpload = async (file: File) => {
+  useEffect(() => {
+    setIndex((i) => (filteredBooks.length ? Math.min(i, filteredBooks.length - 1) : 0));
+  }, [filteredBooks.length]);
+
+  const currentBook = filteredBooks[index];
+
+  const switchBook = (delta: number) => {
+    const n = filteredBooks.length;
+    if (n <= 1) return;
+    setDir(delta >= 0 ? 1 : -1);
+    setIndex((i) => (i + delta + n) % n);
+  };
+
+  const navRef = useRef<{ setFocusedId: (id: string | null) => void } | null>(null);
+
+  const nav = useControllerNav({
+    containerRef: rootRef,
+    active: !modalOpen,
+    gamepadPressed: pressedInputs,
+    isGamepadConnected: Boolean(connectedGamepadName),
+    onMove: (dx, _dy, id) => {
+      if (dx !== 0 && id.startsWith('book:')) {
+        switchBook(dx);
+        return true;
+      }
+      return false;
+    },
+    onActivate: (id) => {
+      if (id.startsWith('book:')) {
+        const book = books.find((b) => b.id === id.slice(5));
+        if (book) onSelectBook(book);
+      } else if (id.startsWith('f:all')) {
+        setFilter({ kind: 'all' });
+      } else if (id.startsWith('f:c:')) {
+        setFilter({ kind: 'cat', id: id.slice(4) });
+      } else if (id === 'act:manage') {
+        setManagerOpen(true);
+      } else if (id === 'act:lang') {
+        setLang(lang === 'zh' ? 'en' : 'zh');
+      } else if (id === 'act:ui') {
+        onToggleUiTheme();
+      } else if (id === 'act:import') {
+        fileInputRef.current?.click();
+      } else if (id === 'act:tutorial') {
+        onOpenTutorial();
+      } else if (id === 'act:controller') {
+        onOpenControllerModal();
+      }
+    },
+    onSecondary: (id) => {
+      if (id.startsWith('book:')) {
+        const book = books.find((b) => b.id === id.slice(5));
+        if (book) setMenuBook(book);
+      }
+    },
+    // Start opens the focused book's manage menu (or the shelf manager).
+    onMenu: (id) => {
+      if (id.startsWith('book:')) {
+        const book = books.find((b) => b.id === id.slice(5));
+        if (book) setMenuBook(book);
+        return;
+      }
+      if (id === 'act:manage' || id.startsWith('f:')) {
+        setManagerOpen(true);
+        return;
+      }
+      if (id.startsWith('act:import')) {
+        fileInputRef.current?.click();
+      } else if (id.startsWith('act:lang')) {
+        setLang(lang === 'zh' ? 'en' : 'zh');
+      } else if (id.startsWith('act:ui')) {
+        onToggleUiTheme();
+      } else if (id.startsWith('act:tutorial')) {
+        onOpenTutorial();
+      } else if (id.startsWith('act:controller')) {
+        onOpenControllerModal();
+      }
+    },
+    // B on the shelf: triple press exits the app.
+    onBack: () => {
+      backCountRef.current += 1;
+      const count = backCountRef.current;
+      if (backTimerRef.current) window.clearTimeout(backTimerRef.current);
+      if (count >= 3) {
+        backCountRef.current = 0;
+        setExitHint(null);
+        try {
+          NativeApp.exitApp();
+        } catch {
+          window.close();
+        }
+        return;
+      }
+      setExitHint({ count, visible: true });
+      backTimerRef.current = window.setTimeout(() => {
+        backCountRef.current = 0;
+        setExitHint((prev) => (prev ? { ...prev, visible: false } : null));
+        window.setTimeout(() => setExitHint(null), 320);
+      }, 600);
+    },
+    getInitialId: () => (filteredBooks.length ? `book:${filteredBooks[0].id}` : 'f:all'),
+  });
+  navRef.current = nav;
+
+  // Keep the controller highlight on the carousel book when it changes.
+  useEffect(() => {
+    const b = filteredBooks[index];
+    if (b) navRef.current?.setFocusedId(`book:${b.id}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
+  useEffect(() => {
+    return () => {
+      if (backTimerRef.current) window.clearTimeout(backTimerRef.current);
+    };
+  }, []);
+
+  const translateImportError = (raw: string): string => {
+    const msg = (raw || '').toLowerCase();
+    if (msg.includes('container.xml') || msg.includes('opf')) {
+      return t('lib.importErrorEpub');
+    }
+    if (msg.includes('no supported image') || msg.includes('image files')) {
+      return t('lib.importErrorNoImages');
+    }
+    return t('lib.importFailed');
+  };
+
+  const handleFiles = async (files: File[]) => {
+    if (!files.length) return;
     setIsImporting(true);
     setImportError(null);
-
-    try {
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      let imported: Book;
-
-      if (ext === 'epub') {
-        const buffer = await file.arrayBuffer();
-        imported = await parseEpub(buffer, file.name);
-      } else if (ext === 'cbz' || ext === 'zip') {
-        const buffer = await file.arrayBuffer();
-        imported = await parseCbz(buffer, file.name);
-      } else if (ext === 'mobi') {
-        const buffer = await file.arrayBuffer();
-        imported = await parseMobi(buffer, file.name);
-      } else if (ext === 'pdf') {
-        // PDF fallback parser with styled viewer
-        const text = await file.text().catch(() => '');
-        imported = parseTxt(
-          text || `PDF 文档: ${file.name}\n\n该 PDF 文档已建立掌机/手机排版索引。`,
-          file.name.replace(/\.pdf$/i, ''),
-          '本地导入文档'
-        );
-        imported.format = 'pdf';
-      } else {
-        // Default to text parsing
-        const text = await file.text();
-        imported = parseTxt(text, file.name.replace(/\.[^/.]+$/, ''), '本地书籍');
+    const imported: Book[] = [];
+    for (const file of files) {
+      try {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        let book: Book;
+        if (ext === 'epub') {
+          book = await parseEpub(await file.arrayBuffer(), file.name);
+        } else if (ext === 'cbz' || ext === 'zip') {
+          book = await parseCbz(await file.arrayBuffer(), file.name);
+        } else if (ext === 'mobi') {
+          book = await parseMobi(await file.arrayBuffer(), file.name);
+        } else if (ext === 'pdf') {
+          const text = await file.text().catch(() => '');
+          book = parseTxt(
+            text || `PDF Document: ${file.name}\n\nThis PDF was indexed for handheld reading.`,
+            file.name.replace(/\.pdf$/i, ''),
+            'Imported Document'
+          );
+          book.format = 'pdf';
+        } else {
+          book = parseTxt(await file.text(), file.name.replace(/\.[^/.]+$/, ''), 'Local Author');
+        }
+        imported.push(book);
+        // Keep the original file bytes so covers / images survive restarts.
+        try {
+          await saveBookFile(book.id, file);
+        } catch (e) {
+          console.warn('Failed to persist imported file:', e);
+        }
+      } catch (err: any) {
+        console.error('Failed to import file:', err);
+        setImportError(translateImportError(err?.message || ''));
       }
-
-      onImportBook(imported);
-    } catch (err: any) {
-      console.error('导入文件失败:', err);
-      setImportError(err.message || '无法解析所选图书格式。');
-    } finally {
-      setIsImporting(false);
     }
+    if (imported.length) onImportBooks(imported);
+    setIsImporting(false);
   };
 
   const getFormatBadge = (format: BookFormat) => {
@@ -122,264 +285,397 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     }
   };
 
-  return (
-    <div className="w-full min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
-      {/* Top Console Navigation Bar */}
-      <header className="sticky top-0 z-20 bg-neutral-900/90 backdrop-blur border-b border-neutral-800 px-3 sm:px-4 py-2.5">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
-          {/* Brand & Console Info */}
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
-              <BookOpen className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="font-bold text-sm sm:text-base tracking-tight text-neutral-100">掌机阅读器</h1>
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700">
-                  v2.0 掌机/手机
+  const renderBook = (book: Book, isComic: boolean, total: number, current: number, progress: number) => {
+    const category = categories.find((c) => c.id === book.categoryId);
+    return (
+      <motion.div
+        key={book.id}
+        data-nav-id={`book:${book.id}`}
+        onClick={() => onSelectBook(book)}
+        initial={{ opacity: 0, x: dir * 120 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+        className="absolute inset-0 cursor-pointer"
+      >
+        <div className="h-full w-full bg-neutral-900/70 hover:bg-neutral-800/60 border border-neutral-800 hover:border-amber-500/60 rounded-2xl p-3 sm:p-4 flex gap-4 transition-colors hh-focusable">
+          {/* Large cover, never cropped */}
+          <div className="h-full aspect-[2/3] shrink-0 rounded-xl overflow-hidden bg-neutral-950 border border-neutral-800 flex items-center justify-center p-2">
+            {book.coverUrl ? (
+              <img
+                src={book.coverUrl}
+                alt={book.title}
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                <BookOpen className="w-12 h-12 text-amber-400/80" />
+                <span className="text-xs font-mono text-neutral-500 text-center px-2">
+                  {book.fileSize || t('lib.offline')}
                 </span>
               </div>
-              <p className="text-[11px] text-neutral-400 hidden sm:block">
-                Odin • Retroid Pocket • Miyoo • RG353 • Steam Deck • 安卓手机
+            )}
+          </div>
+
+          {/* Details */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="font-extrabold text-xl sm:text-2xl text-neutral-50 leading-tight line-clamp-2">
+                  {book.title}
+                </h2>
+                <p className="text-sm text-neutral-400 mt-1 truncate">{book.author}</p>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuBook(book);
+                }}
+                className="p-2 rounded-lg text-neutral-400 hover:text-amber-300 hover:bg-neutral-800 transition-colors shrink-0"
+                title={t('lib.bookMenu')}
+              >
+                <MoreVertical className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span
+                className={`text-[11px] font-mono font-bold uppercase px-2 py-0.5 rounded-md border ${getFormatBadge(
+                  book.format
+                )}`}
+              >
+                {book.format}
+              </span>
+              {category && (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  {category.name}
+                </span>
+              )}
+              {book.bookmarks.length > 0 && (
+                <span className="flex items-center gap-1 text-xs text-amber-400 font-mono">
+                  <Bookmark className="w-4 h-4 fill-current" />
+                  <span>{book.bookmarks.length}</span>
+                </span>
+              )}
+            </div>
+
+            {book.description && (
+              <p className="text-sm text-neutral-300 mt-3 leading-relaxed overflow-y-auto no-scrollbar flex-1 pr-1">
+                {book.description}
               </p>
+            )}
+
+            <div className="mt-3 space-y-2 shrink-0">
+              <div className="flex justify-between text-xs font-mono text-neutral-400">
+                <span>
+                  {isComic
+                    ? tf('lib.pageCurrentOf', { current, total })
+                    : tf('lib.sectionCurrentOf', { current, total })}
+                </span>
+                <span className="text-amber-400 font-bold">
+                  {tf('lib.progressPercent', { percent: progress })}
+                </span>
+              </div>
+              <div className="w-full bg-neutral-800 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-amber-400 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs text-neutral-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="font-mono">{t('lib.openHint')}</span>
+                  <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
+                </span>
+                <span className="font-semibold text-amber-400">
+                  {t('lib.read')} →
+                </span>
+              </div>
             </div>
           </div>
+        </div>
+      </motion.div>
+    );
+  };
 
-          {/* Aspect Ratio Switcher */}
-          <div className="flex items-center gap-2 max-w-full overflow-x-auto no-scrollbar py-0.5">
-            <HandheldAspectSwitcher
-              currentRatio={aspectRatio}
-              onChangeRatio={onChangeAspectRatio}
-              showBezel={showBezel}
-              onToggleBezel={onToggleBezel}
-            />
+  return (
+    <div
+      ref={rootRef}
+      className="w-full h-full bg-neutral-950 text-neutral-100 flex flex-col overflow-hidden"
+    >
+      {/* ================= Top bar ================= */}
+      <header
+        data-nav-zone="header"
+        className="z-20 bg-neutral-900/90 backdrop-blur border-b border-neutral-800 px-5 sm:px-8 safe-px shrink-0"
+        style={{
+          paddingTop: 'calc(0.75rem + max(env(safe-area-inset-top, 0px), 0.5rem))',
+          paddingBottom: '0.75rem',
+        }}
+      >
+        <div className="max-w-7xl mx-auto grid grid-cols-3 items-center gap-2">
+          <div className="flex items-center gap-1.5 justify-self-start">
+            <button
+              data-nav-id="act:lang"
+              onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+              className="p-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 hover:border-amber-500/50 hh-focusable transition-colors"
+              title={t('settings.language')}
+            >
+              <Languages className="w-5 h-5 text-amber-400" />
+            </button>
+            <button
+              data-nav-id="act:ui"
+              onClick={onToggleUiTheme}
+              className="p-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 hover:border-amber-500/50 hh-focusable transition-colors"
+              title={uiTheme === 'night' ? t('settings.dayMode') : t('settings.nightMode')}
+            >
+              {uiTheme === 'night' ? (
+                <Sun className="w-5 h-5 text-amber-400" />
+              ) : (
+                <Moon className="w-5 h-5 text-amber-400" />
+              )}
+            </button>
           </div>
 
-          {/* Gamepad Status, Install & Import Buttons */}
-          <div className="flex items-center gap-2 ml-auto sm:ml-0">
-            <PWAInstallButton onOpenModal={onOpenInstallModal} />
+          <div className="flex flex-col items-center justify-self-center min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <h1 className="font-extrabold tracking-tight text-neutral-50 text-lg whitespace-nowrap">
+                {lang === 'zh' ? t('common.appName') : t('common.appNameEn')}
+              </h1>
+              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">
+                {t('lib.versionBadge')}
+              </span>
+            </div>
+            {connectedGamepadName && (
+              <span className="flex items-center gap-1 mt-0.5 text-[10px] text-emerald-400 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                {t('ctrl.connected')}
+              </span>
+            )}
+          </div>
 
+          <div className="flex items-center gap-1.5 justify-self-end">
             <button
+              data-nav-id="act:tutorial"
+              onClick={onOpenTutorial}
+              className="p-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-300 hover:text-amber-300 hover:border-amber-500/40 hh-focusable transition-colors"
+              title={t('lib.tutorial')}
+            >
+              <HelpCircle className="w-5 h-5 text-sky-400" />
+            </button>
+            <button
+              data-nav-id="act:controller"
               onClick={onOpenControllerModal}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all ${
+              className={`p-2 rounded-xl border hh-focusable transition-all ${
                 connectedGamepadName
-                  ? 'bg-emerald-950/40 border-emerald-600/60 text-emerald-300 hover:bg-emerald-900/40'
+                  ? 'bg-emerald-950/40 border-emerald-600/60 text-emerald-300'
                   : 'bg-neutral-900 border-neutral-700 text-neutral-300 hover:border-neutral-600'
               }`}
+              title={t('lib.controllerConfig')}
             >
-              <Gamepad2 className="w-4 h-4 text-amber-400" />
-              <span className="hidden md:inline">手柄设置</span>
-              <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
+              <Gamepad2 className="w-5 h-5 text-amber-400" />
             </button>
-
-            {/* Hidden File Input */}
+            <button
+              data-nav-id="act:import"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isImporting}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-md hh-focusable transition-colors disabled:opacity-50"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="hidden md:inline">
+                {isImporting ? t('lib.importing') : t('lib.importBook')}
+              </span>
+            </button>
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               accept=".epub,.cbz,.zip,.mobi,.txt,.pdf"
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileUpload(file);
+                const files: File[] = e.target.files
+                  ? Array.from(e.target.files as ArrayLike<File>)
+                  : [];
+                e.target.value = '';
+                if (files.length) handleFiles(files);
               }}
             />
-
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isImporting}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md transition-colors disabled:opacity-50"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{isImporting ? '导入中...' : '导入图书'}</span>
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
-        {/* Banner Alert for Errors */}
+      {/* ================= Shelf ================= */}
+      <main
+        data-nav-zone="shelf"
+        className="flex-1 min-h-0 w-full max-w-7xl mx-auto px-4 sm:px-7 py-3 flex flex-col gap-3"
+      >
+        {/* Category chips row */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            data-nav-id="f:all"
+            onClick={() => setFilter({ kind: 'all' })}
+            className={`px-3.5 py-1.5 rounded-xl border text-sm font-semibold transition-all hh-focusable ${
+              filter.kind === 'all'
+                ? 'bg-amber-500 text-neutral-950 border-amber-400 shadow'
+                : 'bg-neutral-900/80 text-neutral-300 border-neutral-800/80 hover:border-neutral-600'
+            }`}
+          >
+            {t('lib.allBooks')}
+            <span className="ml-1.5 opacity-70 font-mono">{books.length}</span>
+          </button>
+
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              data-nav-id={`f:c:${c.id}`}
+              onClick={() => setFilter({ kind: 'cat', id: c.id })}
+              className={`px-3.5 py-1.5 rounded-xl border text-sm font-semibold transition-all hh-focusable ${
+                filter.kind === 'cat' && filter.id === c.id
+                  ? 'bg-amber-500 text-neutral-950 border-amber-400 shadow'
+                  : 'bg-neutral-900/80 text-neutral-300 border-neutral-800/80 hover:border-neutral-600'
+              }`}
+            >
+              {c.name}
+            </button>
+          ))}
+
+          <span className="flex-1" />
+
+          <button
+            data-nav-id="act:manage"
+            onClick={() => setManagerOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-neutral-700 bg-neutral-900 text-sm font-semibold text-neutral-300 hover:text-amber-300 hover:border-amber-500/40 hh-focusable transition-colors"
+          >
+            <SlidersHorizontal className="w-5 h-5 text-amber-400" />
+            {t('lib.manageShelf')}
+          </button>
+        </div>
+
+        {/* Import error banner */}
         {importError && (
-          <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-700/60 text-rose-300 text-xs flex items-center gap-2">
+          <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-700/60 text-rose-300 text-sm flex items-center gap-2 shrink-0">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{importError}</span>
           </div>
         )}
 
-        {/* Handheld & Phone Feature Highlights Pill */}
-        <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-neutral-900 via-neutral-900/90 to-neutral-950 border border-neutral-800 flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1">
-            <h2 className="font-bold text-xs sm:text-sm text-amber-400 flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              专为安卓掌机与竖屏智能手机深度优化
-            </h2>
-            <p className="text-xs text-neutral-400 max-w-2xl">
-              支持通过物理肩键 <strong className="text-neutral-200">RB (下一页)</strong> 和{' '}
-              <strong className="text-neutral-200">LB (上一页)</strong> 触觉微振翻页；竖屏手机支持左右单手轻触与滑动手势；适配 9:16/9:20 手机与 16:9/4:3 掌机屏幕。
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-300">
-              <span className="text-neutral-500">翻页快捷:</span>
-              <GamepadButtonBadge inputId={profile.bindings.prevPage} size="sm" />
-              <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
-            </div>
-
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-300 hidden sm:flex">
-              <span className="text-neutral-500">沉浸模式:</span>
-              <GamepadButtonBadge inputId={profile.bindings.toggleDistractionFree} size="sm" />
-            </div>
-          </div>
-        </div>
-
-        {/* Format Filter Tabs & Dropzone */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 max-w-full">
-            {formatFilters.map((fmt) => (
+        {/* Fullscreen single-book carousel */}
+        {filteredBooks.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-neutral-800 text-center text-sm text-neutral-500 p-8">
+            <BookOpen className="w-10 h-10 text-neutral-700" />
+            <p>{t('lib.noBooks')}</p>
+            <p className="text-xs text-neutral-600 max-w-md">{t('lib.importBooksHint')}</p>
+            {filter.kind !== 'all' && (
               <button
-                key={fmt.id}
-                onClick={() => setSelectedFormat(fmt.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                  selectedFormat === fmt.id
-                    ? 'bg-neutral-800 text-amber-400 border border-amber-500/50 shadow-sm'
-                    : 'text-neutral-400 hover:text-white bg-neutral-900 border border-neutral-800/80 hover:border-neutral-700'
-                }`}
+                onClick={() => setFilter({ kind: 'all' })}
+                className="text-sm text-amber-400 underline-offset-2 underline"
               >
-                {fmt.label}
+                {t('lib.backToAll')}
               </button>
-            ))}
+            )}
           </div>
+        ) : (
+          <div className="relative flex-1 min-h-0">
+            {currentBook &&
+              (() => {
+                const isComic = currentBook.format === 'cbz';
+                const total = isComic
+                  ? currentBook.comicPages?.length || 1
+                  : currentBook.chapters?.length || 1;
+                const current = isComic
+                  ? currentBook.currentPage
+                  : currentBook.currentChapterIndex + 1;
+                const progress = Math.round((current / total) * 100);
+                return renderBook(currentBook, isComic, total, current, progress);
+              })()}
 
-          <div className="text-xs text-neutral-500 font-mono">
-            共 {filteredBooks.length} 部图书
+            {/* Touch arrows */}
+            {filteredBooks.length > 1 && (
+              <>
+                <button
+                  onClick={() => switchBook(-1)}
+                  className="absolute left-1 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-black/40 hover:bg-black/70 text-neutral-200 transition-colors"
+                  aria-label="Previous book"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={() => switchBook(1)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 z-10 p-2 rounded-full bg-black/40 hover:bg-black/70 text-neutral-200 transition-colors"
+                  aria-label="Next book"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </>
+            )}
           </div>
-        </div>
+        )}
 
-        {/* Books Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4">
-          {filteredBooks.map((book) => {
-            const isComic = book.format === 'cbz';
-            const total = isComic
-              ? book.comicPages?.length || 1
-              : book.chapters?.length || 1;
-            const current = isComic ? book.currentPage : book.currentChapterIndex + 1;
-            const progress = Math.round((current / total) * 100);
-
-            return (
-              <div
-                key={book.id}
-                onClick={() => onSelectBook(book)}
-                className="group relative bg-neutral-900/70 hover:bg-neutral-850 border border-neutral-800 hover:border-amber-500/60 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between cursor-pointer transition-all duration-200 shadow-lg hover:shadow-[0_8px_30px_rgba(245,158,11,0.12)]"
-              >
-                {/* Book Card Top: Format Badge & Bookmarks */}
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-2.5">
-                    <span
-                      className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-md border ${getFormatBadge(
-                        book.format
-                      )}`}
-                    >
-                      {book.format}
-                    </span>
-
-                    {book.bookmarks.length > 0 && (
-                      <span className="flex items-center gap-1 text-[11px] text-amber-400 font-mono">
-                        <Bookmark className="w-3.5 h-3.5 fill-current" />
-                        <span>{book.bookmarks.length}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Comic thumbnail or stylized cover header */}
-                  {book.coverUrl ? (
-                    <div className="w-full h-36 mb-3 rounded-xl overflow-hidden bg-neutral-950 border border-neutral-800 flex items-center justify-center">
-                      <img
-                        src={book.coverUrl}
-                        alt={book.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-full h-24 mb-3 rounded-xl bg-gradient-to-br from-neutral-800 to-neutral-950 border border-neutral-800 p-3 flex flex-col justify-between">
-                      <Layers className="w-6 h-6 text-amber-400/80" />
-                      <div className="text-[10px] font-mono text-neutral-500">
-                        {book.totalChapters || 1} 章节 • {book.fileSize || '离线缓存'}
-                      </div>
-                    </div>
-                  )}
-
-                  <h3 className="font-bold text-sm text-neutral-100 group-hover:text-amber-300 transition-colors line-clamp-2">
-                    {book.title}
-                  </h3>
-                  <p className="text-xs text-neutral-400 mt-1 truncate">{book.author}</p>
-
-                  {book.description && (
-                    <p className="text-[11px] text-neutral-500 mt-2 line-clamp-2 leading-relaxed">
-                      {book.description}
-                    </p>
-                  )}
-                </div>
-
-                {/* Progress bar and button */}
-                <div className="mt-3.5 pt-3 border-t border-neutral-800/80 space-y-2">
-                  <div className="flex justify-between text-[11px] font-mono text-neutral-400">
-                    <span>
-                      {isComic ? `第 ${current} / ${total} 页` : `第 ${current} / ${total} 节`}
-                    </span>
-                    <span className="text-amber-400 font-bold">{progress}%</span>
-                  </div>
-                  <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className="bg-amber-400 h-full rounded-full transition-all duration-300"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[10px] text-neutral-500">
-                      轻触或按 <GamepadButtonBadge inputId="button_0" size="sm" /> 键
-                    </span>
-                    <span className="text-xs font-semibold text-amber-400 group-hover:translate-x-0.5 transition-transform">
-                      进入阅读 →
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        {/* Footer hints */}
+        <div className="shrink-0 text-xs text-neutral-500 font-mono flex flex-wrap items-center gap-x-4 gap-y-1 px-1">
+          {filteredBooks.length > 1 && (
+            <span className="text-amber-400/80">
+              {tf('lib.bookIndexOf', { current: index + 1, total: filteredBooks.length })}
+            </span>
+          )}
+          <span>{t('lib.switchHint')}</span>
+          <span>{t('lib.menuKeyHint')}</span>
         </div>
       </main>
 
-      {/* Handheld Quick Controller Legend Bar */}
-      <footer className="sticky bottom-0 z-20 bg-neutral-950/95 backdrop-blur border-t border-neutral-800 py-2 px-3 sm:px-4 text-xs font-mono text-neutral-400">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex items-center gap-3 sm:gap-4 flex-wrap text-[11px]">
-            <span className="flex items-center gap-1">
-              <GamepadButtonBadge inputId={profile.bindings.bookmark} size="sm" />
-              <span>选择阅读</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
-              <span>下一页</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <GamepadButtonBadge inputId={profile.bindings.prevPage} size="sm" />
-              <span>上一页</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <GamepadButtonBadge inputId={profile.bindings.toggleDistractionFree} size="sm" />
-              <span>沉浸模式</span>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 text-[10px] sm:text-[11px] text-neutral-500">
-            <span>屏幕比例: {aspectRatio}</span>
-            <span>•</span>
-            <span>OLED 纯黑省电驱动中</span>
-          </div>
+      {/* Triple-B exit hint */}
+      {exitHint && (
+        <div
+          className={`fixed left-1/2 -translate-x-1/2 bottom-5 z-[70] px-4 py-2 rounded-xl text-sm font-semibold shadow-xl transition-opacity duration-300 ${
+            exitHint.visible ? 'opacity-100' : 'opacity-0'
+          }`}
+          style={{
+            backgroundColor: 'rgba(9, 9, 11, 0.96)',
+            color: '#fde68a',
+            border: '1px solid rgba(245, 158, 11, 0.6)',
+          }}
+        >
+          {tf('lib.exitHint', { count: Math.max(1, 3 - exitHint.count) })}
         </div>
-      </footer>
+      )}
+
+      {/* ================= Modals ================= */}
+      <BookActionsModal
+        open={menuBook !== null}
+        book={menuBook}
+        categories={categories}
+        gamepadPressed={modalOpen ? pressedInputs : undefined}
+        isGamepadConnected={Boolean(connectedGamepadName)}
+        onClose={() => setMenuBook(null)}
+        onAssign={(catId) => {
+          if (menuBook) onAssignCategory(menuBook.id, catId);
+          setMenuBook(null);
+        }}
+        onRemoveFromShelf={() => {
+          if (menuBook) onRemoveBook(menuBook.id);
+          setMenuBook(null);
+        }}
+        onDeleteFile={() => {
+          if (menuBook) onDeleteBookFile(menuBook.id);
+          setMenuBook(null);
+        }}
+      />
+
+      <ShelfManagerModal
+        open={managerOpen}
+        categories={categories}
+        removedBooks={removedBooks}
+        gamepadPressed={modalOpen ? pressedInputs : undefined}
+        isGamepadConnected={Boolean(connectedGamepadName)}
+        onClose={() => setManagerOpen(false)}
+        onCreate={(name) => onCreateCategory(name)}
+        onRename={(id, name) => onRenameCategory(id, name)}
+        onDeleteCategory={(id) => onDeleteCategory(id)}
+        onRestore={(id) => onRestoreBook(id)}
+        onDeletePermanently={(id) => onDeleteBookFile(id)}
+        onSelectBook={onSelectBook}
+      />
     </div>
   );
 };

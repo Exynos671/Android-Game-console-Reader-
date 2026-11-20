@@ -290,16 +290,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     return (
       <motion.div
         key={book.id}
-        data-nav-id={`book:${book.id}`}
-        onClick={() => onSelectBook(book)}
         initial={{ opacity: 0, x: dir * 120 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute inset-0 cursor-pointer"
+        className="absolute inset-0 flex items-center justify-center"
       >
-        <div className="h-full w-full bg-neutral-900/70 hover:bg-neutral-800/60 border border-neutral-800 hover:border-amber-500/60 rounded-2xl p-3 sm:p-4 flex gap-4 transition-colors hh-focusable">
-          {/* Large cover, never cropped */}
-          <div className="h-full aspect-[2/3] shrink-0 rounded-xl overflow-hidden bg-neutral-950 border border-neutral-800 flex items-center justify-center p-2">
+        <div
+          data-nav-id={`book:${book.id}`}
+          onClick={() => onSelectBook(book)}
+          className="h-auto max-h-full w-full bg-neutral-900/70 hover:bg-neutral-800/60 border border-neutral-800 hover:border-amber-500/60 rounded-2xl p-2.5 sm:p-4 landscape:h-full flex gap-3 sm:gap-4 overflow-hidden cursor-pointer transition-colors hh-focusable"
+        >
+          {/* Cover: height-driven on wide screens, but width-capped on
+              phones. A full-height cover is much wider than the card at
+              phone aspect ratios and used to leave the details column with
+              zero width. */}
+          <div className="self-center w-[34%] max-w-[190px] sm:max-w-[260px] aspect-[2/3] shrink-0 rounded-xl overflow-hidden bg-neutral-950 border border-neutral-800 flex items-center justify-center p-1.5 sm:p-2 landscape:self-auto landscape:h-full landscape:w-auto landscape:max-w-none">
             {book.coverUrl ? (
               <img
                 src={book.coverUrl}
@@ -307,9 +312,9 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="w-full h-full object-contain"
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-                <BookOpen className="w-12 h-12 text-amber-400/80" />
-                <span className="text-xs font-mono text-neutral-500 text-center px-2">
+              <div className="w-full h-full flex flex-col items-center justify-center gap-2 sm:gap-3">
+                <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-amber-400/80" />
+                <span className="text-[10px] sm:text-xs font-mono text-neutral-500 text-center px-1 whitespace-nowrap">
                   {book.fileSize || t('lib.offline')}
                 </span>
               </div>
@@ -320,7 +325,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h2 className="font-extrabold text-xl sm:text-2xl text-neutral-50 leading-tight line-clamp-2">
+                <h2 className="font-extrabold text-lg sm:text-2xl text-neutral-50 leading-tight line-clamp-2">
                   {book.title}
                 </h2>
                 <p className="text-sm text-neutral-400 mt-1 truncate">{book.author}</p>
@@ -330,14 +335,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   e.stopPropagation();
                   setMenuBook(book);
                 }}
-                className="p-2 rounded-lg text-neutral-400 hover:text-amber-300 hover:bg-neutral-800 transition-colors shrink-0"
+                className="p-1.5 sm:p-2 rounded-lg text-neutral-400 hover:text-amber-300 hover:bg-neutral-800 transition-colors shrink-0"
                 title={t('lib.bookMenu')}
               >
-                <MoreVertical className="w-5 h-5" />
+                <MoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
 
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <div className="flex items-center gap-2 mt-1.5 sm:mt-2 flex-wrap">
               <span
                 className={`text-[11px] font-mono font-bold uppercase px-2 py-0.5 rounded-md border ${getFormatBadge(
                   book.format
@@ -359,13 +364,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             </div>
 
             {book.description && (
-              <p className="text-sm text-neutral-300 mt-3 leading-relaxed overflow-y-auto no-scrollbar flex-1 pr-1">
+              <p className="hidden sm:block text-sm text-neutral-300 mt-3 leading-relaxed overflow-y-auto no-scrollbar sm:flex-1 pr-1">
                 {book.description}
               </p>
             )}
 
-            <div className="mt-3 space-y-2 shrink-0">
-              <div className="flex justify-between text-xs font-mono text-neutral-400">
+            <div className="mt-auto pt-2 sm:pt-3 space-y-1.5 sm:space-y-2 shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs font-mono text-neutral-400">
                 <span>
                   {isComic
                     ? tf('lib.pageCurrentOf', { current, total })
@@ -381,10 +386,12 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between text-xs text-neutral-500">
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] sm:text-xs text-neutral-500">
                 <span className="flex items-center gap-1.5">
                   <span className="font-mono">{t('lib.openHint')}</span>
-                  <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
+                  <span className="hidden sm:inline-flex">
+                    <GamepadButtonBadge inputId={profile.bindings.nextPage} size="sm" />
+                  </span>
                 </span>
                 <span className="font-semibold text-amber-400">
                   {t('lib.read')} →

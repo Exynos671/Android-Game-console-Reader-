@@ -319,14 +319,19 @@ body {
 
 /* Non-blocking toast that fades in from the top and stays put while the
    parent decides to clear it (used for the double-press-B exit hint). */
+/* The chip is horizontally centred by Tailwind's `translate` utility
+   (`-translate-x-1/2`). Only animate the vertical offset here: putting
+   translate(-50%, …) in the keyframes as well applies the -50% twice
+   (individual `translate` + `transform` compose), which pushed the chip
+   half off-screen on narrow phones. */
 @keyframes hh-hint-in {
   0% {
     opacity: 0;
-    transform: translate(-50%, -8px);
+    transform: translateY(-8px);
   }
   100% {
     opacity: 1;
-    transform: translate(-50%, 0);
+    transform: translateY(0);
   }
 }
 .hh-hint-chip {

@@ -1492,8 +1492,10 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
                     }}
                   />
                 </span>
-                <StatusClock />
-                <StatusBattery />
+                <span className="flex items-center gap-2 shrink-0">
+                  <StatusClock />
+                  <StatusBattery />
+                </span>
               </div>
             </div>
           )}

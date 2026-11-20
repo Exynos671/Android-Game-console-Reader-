@@ -108,8 +108,10 @@ interface PaintItem {
   face: PixelFace | null;
   /** CSS px from the range top to the shared line baseline. */
   baselineOffset: number;
-  /** Full display-size font shorthand for direct / .notdef fallbacks. */
-  font: string;
+  /** CSS font prefix (style + weight) for direct / .notdef fallbacks. */
+  fontPrefix: string;
+  /** Family stack for direct / .notdef fallbacks. */
+  fontFamily: string;
   bold: boolean;
   italic: boolean;
   color: string;
@@ -914,7 +916,8 @@ export const PixelCanvasText: React.FC<PixelCanvasTextProps> = ({
                 // Synthetic weight / slant is applied to the bands at paint
                 // time; rasterizing the normal face keeps the native grid and
                 // lets one atlas cell serve all weights.
-                font: `${fontPrefix} ${itemFontSize}px ${itemFamily}`,
+                fontPrefix,
+                fontFamily: itemFamily,
                 bold: itemBold,
                 italic: itemItalic,
                 color: itemColor,
@@ -965,7 +968,11 @@ export const PixelCanvasText: React.FC<PixelCanvasTextProps> = ({
           // Direct fill for sizes below the design grid, missing glyphs and
           // colour emoji (band painting would flatten the emoji into one
           // ink colour, so they are drawn with the browser's own bitmap).
-          ctx.font = item.font;
+          // The canvas is in device pixels, so the CSS font size must be
+          // scaled by the DPR as well; otherwise 10-11px footnote / header
+          // metadata lands at 10 device pixels (a third of its intended size
+          // on a 3x phone).
+          ctx.font = `${item.fontPrefix} ${item.fontSize * dpr}px ${item.fontFamily}`;
           ctx.textAlign = 'left';
           ctx.textBaseline = 'alphabetic';
           ctx.fillStyle = item.color;
@@ -974,11 +981,13 @@ export const PixelCanvasText: React.FC<PixelCanvasTextProps> = ({
             baselineDevice = Math.round((item.y + item.baselineOffset) * dpr);
           } else {
             const metrics = ctx.measureText(item.ch);
-            const ascent =
+            // measureText metrics are already in device pixels (the context
+            // has no transform); only `item.y` is still CSS px.
+            const ascentDevice =
               metrics.fontBoundingBoxAscent > 0
                 ? metrics.fontBoundingBoxAscent
-                : item.fontSize * 1.078;
-            baselineDevice = Math.round((item.y + ascent) * dpr);
+                : item.fontSize * dpr * 1.078;
+            baselineDevice = Math.round(item.y * dpr + ascentDevice);
           }
           ctx.fillText(item.ch, ox, baselineDevice);
           ctx.restore();

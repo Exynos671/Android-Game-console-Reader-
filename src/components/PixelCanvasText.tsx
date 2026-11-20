@@ -83,6 +83,11 @@ interface Band {
   x1: number;
   y0: number;
   y1: number;
+  /**
+   * True when the design row just below `y1` has ink under this run, i.e.
+   * this band continues into the next band instead of ending the stroke.
+   */
+  below: boolean;
 }
 
 interface Bitmap {
@@ -139,7 +144,7 @@ function rasterize(bits: Uint8Array, cellW: number, cellH: number): Bitmap {
         prev.y1 = y + 1;
         next.push(prev);
       } else {
-        next.push({ x0: r.x0, x1: r.x1, y0: y, y1: y + 1 });
+        next.push({ x0: r.x0, x1: r.x1, y0: y, y1: y + 1, below: false });
       }
     }
     for (const b of open) {
@@ -148,6 +153,22 @@ function rasterize(bits: Uint8Array, cellW: number, cellH: number): Bitmap {
     open = next;
   }
   bands.push(...open);
+
+  // A band that continues into the row below must be painted all the way to
+  // that row's snapped top. Otherwise two independent floors leave a
+  // sub-pixel gap at the seam which the canvas antialiases into a light line
+  // through the stroke (the "flying white" seen at fractional scales such as
+  // 18px on a 2x panel).
+  for (const band of bands) {
+    if (band.y1 >= cellH) continue;
+    const row = band.y1 * cellW;
+    for (let x = band.x0; x < band.x1; x++) {
+      if (bits[row + x]) {
+        band.below = true;
+        break;
+      }
+    }
+  }
   return { bands, empty, color: false };
 }
 
@@ -433,14 +454,25 @@ function paintBands(
     for (const band of bitmap.bands) {
       // Snapping the start of every band to a whole device row gives each
       // stroke the same sub-pixel phase; the fractional height then adds the
-      // same fringe to all of them.
+      // same fringe to all of them. Where the glyph continues into the row
+      // below, that fringe is filled instead (see `below`), so a fractional
+      // scale cannot leave a seam inside the stroke.
       const shear = style.italic
         ? Math.round((style.ascent - band.y0) * ITALIC_SLOPE * scale)
         : 0;
+      const top = Math.floor((band.y0 - style.ascent) * scale);
       const x = ox + Math.floor(band.x0 * scale) + shear + dx;
-      const y = baseline + Math.floor((band.y0 - style.ascent) * scale) + dy;
+      const y = baseline + top + dy;
       const w = (band.x1 - band.x0) * scale;
-      const h = (band.y1 - band.y0) * scale;
+      let h = (band.y1 - band.y0) * scale;
+      if (band.below) {
+        // The next design row starts at its own floored top; reach it exactly
+        // so a fractional scale cannot leave a seam between the two bands.
+        // Only interior edges are extended: the glyph's outer fringe is left
+        // alone, and the extra ink is exactly the coverage the gap lacked, so
+        // the stroke is restored to its intended weight rather than inflated.
+        h = Math.max(h, Math.floor((band.y1 - style.ascent) * scale) - top);
+      }
       ctx.fillRect(x, y, w, h);
     }
   };

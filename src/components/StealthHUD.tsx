@@ -41,8 +41,9 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
   return (
     <div
       className={`fixed inset-x-0 bottom-0 pointer-events-none transition-all duration-300 z-40 ${
-        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+        visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
       }`}
+      aria-hidden={!visible}
     >
       {/* HUD Container (safe-area aware) */}
       <div
@@ -53,7 +54,16 @@ export const StealthHUD: React.FC<StealthHUDProps> = ({
           paddingRight: 'calc(1rem + env(safe-area-inset-right, 0px))',
         }}
       >
-        <div className="pointer-events-auto bg-neutral-950/90 backdrop-blur-md border border-neutral-800/90 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5">
+        <div
+          className={`${
+            visible ? 'pointer-events-auto' : 'pointer-events-none'
+          } bg-neutral-950/90 backdrop-blur-md border border-neutral-800/90 rounded-2xl p-3 shadow-2xl flex flex-col gap-2.5`}
+          // Keep the invisible HUD completely inert: it sits above the normal
+          // reading chrome when distraction-free mode is off, so a stray tap
+          // used to hit hidden buttons (e.g. "Exit Fullscreen") and toggle the
+          // mode right back on.
+          inert={!visible}
+        >
           {/* Top Row: Title, Chapter, Page Progress & Stats */}
           <div className="flex items-center justify-between gap-4 text-xs">
             <div className="flex items-center gap-2 truncate">

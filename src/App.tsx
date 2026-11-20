@@ -11,6 +11,7 @@ import {
 } from './types';
 import { SAMPLE_BOOKS } from './data/sampleBooks';
 import { useGamepad } from './hooks/useGamepad';
+import { useScreenAwake, reportScreenActivity } from './hooks/useScreenAwake';
 import { useI18n } from './i18n';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView, ReaderViewHandle, BackHint } from './components/ReaderView';
@@ -21,7 +22,7 @@ import { TutorialModal } from './components/TutorialModal';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { applyImmersiveMode } from './services/immersive';
 import { getBookFile, deleteBookFile as dropBookFile } from './services/bookStore';
-import { parseEpub, parseCbz } from './services/bookParser';
+import { parseEpub, parseCbz, parseTxt, TXT_PARSER_REVISION } from './services/bookParser';
 import { resolvePanelType } from './services/displayInfo';
 
 const SETTINGS_STORAGE_KEY = 'handheld_reader_settings';
@@ -34,6 +35,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.7,
   fontFamily: 'serif',
+  pixelCanvas: true,
   theme: 'oled',
   readingMode: 'paginated',
   distractionFree: false,
@@ -46,6 +48,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   bottomBarFontSize: 'md',
   backDoublePressMs: 800,
   immersiveMode: true,
+  screenSleepMinutes: 2,
   uiTheme: 'night',
   uiScale: 'large',
   screenPanel: 'auto',
@@ -290,6 +293,10 @@ export default function App() {
 
   const activeBook = books.find((b) => b.id === activeBookId);
 
+  // Block the screen from sleeping while a book is open (configurable in the
+  // reading settings; "无 / None" keeps it awake indefinitely).
+  useScreenAwake(settings.screenSleepMinutes, Boolean(activeBook));
+
   const handleUpdateBook = useCallback(
     (updated: Partial<Book>) => {
       if (!activeBookId) return;
@@ -332,7 +339,7 @@ export default function App() {
   );
 
   const cycleTheme = useCallback(() => {
-    const themeCycle: ReaderTheme[] = ['oled', 'dark', 'sepia', 'paper', 'retro', 'gba'];
+    const themeCycle: ReaderTheme[] = ['oled', 'dark', 'sepia', 'paper', 'retro', 'gba', 'gbp'];
     setSettings((prev) => {
       const idx = themeCycle.indexOf(prev.theme);
       let next = themeCycle[(idx + 1) % themeCycle.length];
@@ -426,32 +433,57 @@ export default function App() {
   }, []);
 
   // Rebuild object URLs (covers / comic pages / chapter images) for imported
-  // EPUB & CBZ books from their persisted source files. Object URLs do not
-  // survive a restart, so re-parsing restores the covers.
+  // EPUB & CBZ books from their persisted source files, and re-parse TXT books
+  // produced by an older parser so paragraph / chapter fixes reach books that
+  // are already on the shelf.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const targets = [...books, ...removedBooks].filter(
-        (b) => b.format === 'epub' || b.format === 'cbz'
+        (b) =>
+          b.format === 'epub' ||
+          b.format === 'cbz' ||
+          (b.format === 'txt' && b.parserRevision !== TXT_PARSER_REVISION)
       );
       for (const b of targets) {
         if (cancelled) return;
         try {
           const blob = await getBookFile(b.id);
           if (!blob) continue;
-          const buf = await blob.arrayBuffer();
-          const parsed = b.format === 'cbz' ? await parseCbz(buf, b.title) : await parseEpub(buf, b.title);
+          let parsed: Book;
+          if (b.format === 'cbz') {
+            parsed = await parseCbz(await blob.arrayBuffer(), b.title);
+          } else if (b.format === 'epub') {
+            parsed = await parseEpub(await blob.arrayBuffer(), b.title);
+          } else {
+            parsed = parseTxt(await blob.text(), b.title, b.author);
+          }
+
+          // A parser upgrade can change the chapter list of a TXT book. Map
+          // the old reading position onto the new structure instead of
+          // jumping to an unrelated chapter.
+          const oldChapterCount = Math.max(1, b.chapters?.length || 1);
+          const newChapterCount = Math.max(1, parsed.chapters?.length || 1);
+          const structureChanged = b.format === 'txt' && oldChapterCount !== newChapterCount;
+          const oldPageCount = Math.max(1, b.measuredChapterPages?.[b.currentChapterIndex] || 1);
+          const progress =
+            (b.currentChapterIndex + Math.min(0.999, (b.readerPage ?? 0) / oldPageCount)) /
+            oldChapterCount;
+          const chapterIndex = structureChanged
+            ? Math.min(newChapterCount - 1, Math.max(0, Math.floor(progress * newChapterCount)))
+            : b.currentChapterIndex;
+
           const merged: Book = {
             ...b,
             ...parsed,
             id: b.id,
             format: b.format,
-            currentChapterIndex: b.currentChapterIndex,
-            currentPage: b.currentPage,
-            readerPage: b.readerPage,
+            currentChapterIndex: chapterIndex,
+            currentPage: structureChanged ? chapterIndex + 1 : b.currentPage,
+            readerPage: structureChanged ? 0 : b.readerPage,
             bookmarks: b.bookmarks,
             categoryId: b.categoryId,
-            measuredChapterPages: b.measuredChapterPages,
+            measuredChapterPages: structureChanged ? [] : b.measuredChapterPages,
             lastReadTimestamp: b.lastReadTimestamp,
           };
           setBooks((prev) => prev.map((x) => (x.id === b.id ? merged : x)));
@@ -503,6 +535,7 @@ export default function App() {
   // Gamepad / keyboard action dispatcher
   const handleGamepadAction = useCallback(
     (action: ReaderAction) => {
+      reportScreenActivity();
       if (isControllerModalOpen) return;
       switch (action) {
         case 'nextPage':
@@ -649,6 +682,7 @@ export default function App() {
     onAction: handleGamepadAction,
     onRecordingPress: handleRecordingPress,
     onScroll: (deltaY) => {
+      reportScreenActivity();
       setScrollDeltaY(deltaY);
       setTimeout(() => setScrollDeltaY(0), 16);
     },
@@ -843,7 +877,16 @@ export default function App() {
             if (activeBook.format === 'cbz') {
               handleUpdateBook({ currentPage: index + 1 });
             } else {
-              handleUpdateBook({ currentChapterIndex: index, currentPage: index + 1 });
+              // The in-chapter page belongs to the chapter we are leaving;
+              // carrying it over would open the new chapter on a phantom
+              // page (and swallow the next page-turn). Re-selecting the
+              // current chapter keeps its position.
+              const chapterChanged = index !== activeBook.currentChapterIndex;
+              handleUpdateBook({
+                currentChapterIndex: index,
+                currentPage: index + 1,
+                ...(chapterChanged ? { readerPage: 0 } : {}),
+              });
             }
           }}
           bookmarks={activeBook.bookmarks}

@@ -1,6 +1,6 @@
 export type BookFormat = 'txt' | 'epub' | 'pdf' | 'cbz' | 'mobi';
 
-export type ReaderTheme = 'oled' | 'dark' | 'sepia' | 'paper' | 'retro' | 'gba';
+export type ReaderTheme = 'oled' | 'dark' | 'sepia' | 'paper' | 'retro' | 'gba' | 'gbp';
 
 export type ReadingMode = 'paginated' | 'continuous' | 'manga_rtl' | 'webtoon';
 
@@ -23,6 +23,9 @@ export type ScreenPanel = 'auto' | 'oled' | 'lcd';
 
 /** What the bottom progress bar counts against. */
 export type BookProgressMode = 'chapter' | 'book';
+
+/** How long to block screen sleep while reading: 2 / 5 / 10 minutes, 0 = never sleep. */
+export type ScreenSleepMinutes = 0 | 2 | 5 | 10;
 
 export type ReaderFontFamily =
   | 'serif'
@@ -114,12 +117,16 @@ export interface Book {
   measuredChapterPages?: number[];
   /** Cached count of chapters whose reflowed pages have been measured. */
   measuredChapterCount?: number;
+  /** Revision of the plain-text parser that produced `chapters` (TXT books). */
+  parserRevision?: number;
 }
 
 export interface ReaderSettings {
   fontSize: number; // in px
   lineHeight: number; // 1.2 to 2.2
   fontFamily: ReaderFontFamily;
+  /** Repaint pixel-font glyphs through the canvas dot-matrix layer. */
+  pixelCanvas: boolean;
   theme: ReaderTheme;
   readingMode: ReadingMode;
   distractionFree: boolean;
@@ -135,6 +142,7 @@ export interface ReaderSettings {
   bottomBarFontSize: 'xs' | 'sm' | 'md'; // size of the bottom info bar text
   backDoublePressMs: number; // double-press interval (ms) to exit a book
   immersiveMode: boolean; // hide the Android status/navigation bars
+  screenSleepMinutes: ScreenSleepMinutes; // block screen sleep while reading (0 = always on)
   uiTheme: UiTheme; // night (dark chrome) or day (light chrome)
   uiScale: UiScale; // global chrome size for small handheld screens
   screenPanel: ScreenPanel; // physical panel type (OLED guard)

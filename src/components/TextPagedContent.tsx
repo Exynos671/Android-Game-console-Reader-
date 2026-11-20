@@ -6,6 +6,9 @@ import React, {
   useState,
 } from 'react';
 import { PageTurnAnimation } from '../types';
+import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio';
+import { snapDevicePx } from '../utils/pixelFont';
+import { PixelCanvasText } from './PixelCanvasText';
 
 export type PageTurnAnimationKind = PageTurnAnimation;
 export type PageMarginSize = 'compact' | 'balanced' | 'relaxed';
@@ -18,10 +21,18 @@ export interface TextPagedContentProps {
   fontSize: number;
   lineHeight: number;
   fontFamilyClass: string;
+  /** Keep columns, insets and offsets on whole device pixels (dot-matrix text). */
+  pixelPerfect?: boolean;
   marginSize: PageMarginSize;
   animation: PageTurnAnimationKind;
   /** Duration of the slide / fade animation in ms. */
   speedMs?: number;
+  /** Repaint the visible glyphs through the canvas dot-matrix layer. */
+  pixelCanvas?: boolean;
+  /** Paint the LCD ghost in canvas mode (dense panels only). */
+  pixelLcdGhost?: boolean;
+  /** Any theme / font change that should invalidate painted canvases. */
+  canvasRepaintKey?: string;
   /** Reports how many pages the current reflow produced. */
   onPageCountChange?: (count: number) => void;
 }
@@ -46,22 +57,39 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
   fontSize,
   lineHeight,
   fontFamilyClass,
+  pixelPerfect = false,
   marginSize,
   animation,
   speedMs = 500,
+  pixelCanvas = false,
+  pixelLcdGhost = false,
+  canvasRepaintKey,
   onPageCountChange,
 }) => {
   const rootRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLSpanElement>(null);
 
   const [pageCount, setPageCount] = useState(1);
+  // Canvas layer geometry (CSS px) of one page column.
+  const [pageBox, setPageBox] = useState({ w: 0, h: 0 });
+  // Bumped after every successful reflow. Canvas glyphs are placed from DOM
+  // ranges, so a re-measure (font swap, chapter change, resize) can move
+  // every character even when the page box itself did not change.
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
   const stepRef = useRef(0);
   const pageRef = useRef(page);
   const htmlRef = useRef(html);
   const measureRafRef = useRef<number | null>(null);
 
+  const dpr = useDevicePixelRatio();
+
   const margins = MARGINS[marginSize];
+  // The sheet is clipped by an inset viewport; landing it (and the column
+  // width) on whole device pixels is what keeps dot-matrix text sharp.
+  const insetX = pixelPerfect ? snapDevicePx(margins.x, dpr) : margins.x;
+  const insetY = pixelPerfect ? snapDevicePx(margins.y, dpr) : margins.y;
 
   useEffect(() => {
     pageRef.current = page;
@@ -81,9 +109,26 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
     const rawH = root.clientHeight;
     if (rawW < 40 || rawH < 40) return false;
 
-    const contentW = Math.max(40, Math.floor(rawW - margins.x * 2));
-    const contentH = Math.max(40, Math.floor(rawH - margins.y * 2));
+    // Pixel fonts only stay crisp when the column width and page insets are
+    // whole device pixels; for normal text the classic integer CSS px maths
+    // is kept unchanged.
+    const unit = pixelPerfect ? dpr : 1;
+    const contentW = Math.max(40, Math.floor((rawW - insetX * 2) * unit) / unit);
+    const contentH = Math.max(40, Math.floor((rawH - insetY * 2) * unit) / unit);
     if (!contentW || !contentH) return false;
+
+    setPageBox((prev) =>
+      prev.w === contentW && prev.h === contentH ? prev : { w: contentW, h: contentH }
+    );
+
+    // Clip to the exact snapped page box, otherwise the <1px difference
+    // between the inset viewport and the floored column width could let a
+    // sliver of the neighbouring column peek through.
+    const viewport = viewportRef.current;
+    if (viewport) {
+      viewport.style.width = `${contentW}px`;
+      viewport.style.height = `${contentH}px`;
+    }
 
     const prevTransition = sheet.style.transition;
     sheet.style.transition = 'none';
@@ -117,8 +162,9 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
     stepRef.current = contentW;
     measuredOnceRef.current = true;
     setPageCount((prev) => (prev !== count ? count : prev));
+    setLayoutEpoch((epoch) => epoch + 1);
     return true;
-  }, [html, fontSize, lineHeight, fontFamilyClass, margins.x, margins.y]);
+  }, [html, fontSize, lineHeight, fontFamilyClass, insetX, insetY, dpr, pixelPerfect]);
 
   const runMeasurement = useCallback(() => {
     let attempts = 0;
@@ -237,12 +283,13 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
       {/* Single-page viewport: inset by the page margins and strictly
           clipped, so adjacent columns can never show at the screen edges. */}
       <div
+        ref={viewportRef}
         className="absolute overflow-hidden"
         style={{
-          left: margins.x,
-          top: margins.y,
-          right: margins.x,
-          bottom: margins.y,
+          left: insetX,
+          top: insetY,
+          right: insetX,
+          bottom: insetY,
         }}
       >
         <div
@@ -254,10 +301,33 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
           }}
         >
           <div dangerouslySetInnerHTML={{ __html: html }} />
+          {pixelCanvas && (
+            <PixelCanvasText
+              sheetRef={sheetRef}
+              page={page}
+              pageCount={pageCount}
+              contentW={pageBox.w}
+              contentH={pageBox.h}
+              html={html}
+              dpr={dpr}
+              enabled={pixelCanvas}
+              lcdGhost={pixelLcdGhost}
+              repaintKey={
+                `${canvasRepaintKey ?? `${fontFamilyClass}|${fontSize}|${lineHeight}|${dpr}`}|` +
+                `${layoutEpoch}`
+              }
+            />
+          )}
+          {/* Block-level end marker: an inline marker gets a full line box
+              (~line-height tall) even at the very top of a new column, so
+              a chapter that ended exactly at the bottom of a page was
+              counted as having one extra blank page. As a block it lands
+              at y = 0 in the next column, so the `y > 3` check in
+              `measure()` correctly counts only pages that hold text. */}
           <span
             ref={sentinelRef}
             aria-hidden="true"
-            style={{ display: 'inline-block', width: 1, height: 1 }}
+            style={{ display: 'block', width: 1, height: 1 }}
           />
         </div>
       </div>

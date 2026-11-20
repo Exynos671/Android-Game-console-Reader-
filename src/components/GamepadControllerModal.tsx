@@ -114,21 +114,21 @@ export const GamepadControllerModal: React.FC<GamepadControllerModalProps> = ({
         aria-modal="true"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-950/60">
-          <div className="flex items-center gap-3">
+        <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-neutral-800 bg-neutral-950/60">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
               <Gamepad2 className="w-6 h-6" />
             </div>
-            <div>
-              <h2 className="text-lg font-bold flex items-center gap-2">
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold flex flex-wrap items-center gap-2">
                 {t('ctrl.title')}
                 {connectedGamepadName ? (
-                  <span className="text-xs font-normal px-2.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-700/60 flex items-center gap-1.5">
+                  <span className="whitespace-nowrap text-xs font-normal px-2.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-700/60 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     {t('ctrl.connected')}
                   </span>
                 ) : (
-                  <span className="text-xs font-normal px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 flex items-center gap-1.5">
+                  <span className="whitespace-nowrap text-xs font-normal px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 flex items-center gap-1.5">
                     <AlertCircle className="w-3 h-3 text-amber-400" />
                     {t('ctrl.pressAny')}
                   </span>
@@ -149,10 +149,10 @@ export const GamepadControllerModal: React.FC<GamepadControllerModalProps> = ({
         </div>
 
         {/* Live Controller Monitor Bar */}
-        <div className="px-6 py-2.5 bg-neutral-950/90 border-b border-neutral-800/80 flex items-center justify-between gap-4 text-xs font-mono">
+        <div className="shrink-0 px-4 sm:px-6 py-2.5 bg-neutral-950/90 border-b border-neutral-800/80 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs font-mono">
           <div className="flex items-center gap-2 text-neutral-400">
-            <Radio className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
-            <span>{t('ctrl.activeInputs')}</span>
+            <Radio className="shrink-0 w-3.5 h-3.5 text-sky-400 animate-pulse" />
+            <span className="whitespace-nowrap">{t('ctrl.activeInputs')}</span>
             {pressedInputs.size > 0 ? (
               <div className="flex items-center gap-1.5 flex-wrap">
                 {Array.from(pressedInputs).map((inp) => (
@@ -164,7 +164,7 @@ export const GamepadControllerModal: React.FC<GamepadControllerModalProps> = ({
             )}
           </div>
 
-          <div className="text-neutral-400">
+          <div className="ml-auto whitespace-nowrap text-neutral-400">
             {t('ctrl.profile')}{' '}
             <span className="text-amber-400 font-bold">
               {presetLabel(profile.id, profile.name)}
@@ -198,10 +198,10 @@ export const GamepadControllerModal: React.FC<GamepadControllerModalProps> = ({
         )}
 
         {/* Tabs */}
-        <div className="flex border-b border-neutral-800 px-6 bg-neutral-900/50">
+        <div className="shrink-0 flex border-b border-neutral-800 px-4 sm:px-6 bg-neutral-900/50 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('bindings')}
-            className={`py-3 px-4 text-sm font-semibold border-b-2 transition-colors ${
+            className={`shrink-0 whitespace-nowrap py-3 px-2.5 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition-colors ${
               activeTab === 'bindings'
                 ? 'border-amber-400 text-amber-400'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -211,7 +211,7 @@ export const GamepadControllerModal: React.FC<GamepadControllerModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('presets')}
-            className={`py-3 px-4 text-sm font-semibold border-b-2 transition-colors ${
+            className={`shrink-0 whitespace-nowrap py-3 px-2.5 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition-colors ${
               activeTab === 'presets'
                 ? 'border-amber-400 text-amber-400'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -221,7 +221,7 @@ export const GamepadControllerModal: React.FC<GamepadControllerModalProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('tuning')}
-            className={`py-3 px-4 text-sm font-semibold border-b-2 transition-colors ${
+            className={`shrink-0 whitespace-nowrap py-3 px-2.5 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition-colors ${
               activeTab === 'tuning'
                 ? 'border-amber-400 text-amber-400'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -455,19 +455,20 @@ export const GamepadControllerModal: React.FC<GamepadControllerModalProps> = ({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-neutral-800 bg-neutral-950 flex items-center justify-between">
+        {/* Footer: stack the two actions on phones so their labels never
+            squeeze into each other; keep the desktop row otherwise. */}
+        <div className="px-4 sm:px-6 py-4 border-t border-neutral-800 bg-neutral-950 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <button
             onClick={() => handlePresetSelect(presetProfiles[0])}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-800 transition-colors"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 py-2 sm:py-1.5 rounded-lg border border-neutral-700 text-xs text-neutral-300 hover:bg-neutral-800 transition-colors"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            {t('ctrl.resetStandard')}
+            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-center">{t('ctrl.resetStandard')}</span>
           </button>
 
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition-all"
+            className="w-full sm:w-auto whitespace-nowrap px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition-all"
           >
             {t('ctrl.saveResume')}
           </button>

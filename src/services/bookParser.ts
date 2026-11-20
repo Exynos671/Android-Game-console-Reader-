@@ -1,5 +1,12 @@
 import JSZip from 'jszip';
 import { Book, BookFormat, Chapter, ComicPage } from '../types';
+import { countWords, isCjkDominant } from '../utils/content';
+
+/**
+ * Bump this when TXT chapter parsing changes so previously imported books
+ * are re-parsed from their stored source file on startup.
+ */
+export const TXT_PARSER_REVISION = 2;
 
 /**
  * Natural sort helper for comic page filenames like page_1, page_2, page_10
@@ -25,9 +32,27 @@ function chunkByWords(text: string, chunkSize: number): Chapter[] {
   return chunks;
 }
 
+/**
+ * Split plain text into paragraph blocks. CJK text conventionally uses one
+ * paragraph per line; Latin text uses blank lines as paragraph separators.
+ */
+function splitParagraphs(text: string): string[] {
+  const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+  if (isCjkDominant(normalized)) {
+    return normalized
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+  return normalized
+    .split(/\n[ \t\u00a0\u3000]*\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+}
+
 /** Split a book into character-sized chunks at paragraph boundaries. */
 function chunkByChars(text: string, maxCharsPer: number): Chapter[] {
-  const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+  const paragraphs = splitParagraphs(text);
   const chunks: Chapter[] = [];
   let buffer: string[] = [];
   let bufferedChars = 0;
@@ -35,12 +60,12 @@ function chunkByChars(text: string, maxCharsPer: number): Chapter[] {
   const flush = () => {
     if (buffer.length === 0) return;
     const idx = chunks.length + 1;
-    const content = buffer.join('\n');
+    const content = buffer.join('\n\n');
     chunks.push({
       id: `chap_${idx}`,
       title: `Section ${idx}`,
       content,
-      wordCount: Math.max(1, content.length),
+      wordCount: countWords(content),
     });
     buffer = [];
     bufferedChars = 0;
@@ -88,65 +113,80 @@ function chunkByChars(text: string, maxCharsPer: number): Chapter[] {
     bufferedChars += para.length + 1;
   };
 
-  for (const line of lines) pushParagraph(line);
+  for (const paragraph of paragraphs) pushParagraph(paragraph);
   flush();
   return chunks;
 }
 
+const CJK_CHAPTER_HEADING = /^第[0-9０-９零〇一二三四五六七八九十百千万两]+[章回节卷篇]/;
+const LATIN_CHAPTER_HEADING = /^(?:chapter|section|part)\s+(?:\d+|[ivxlcdm]+)\b/i;
+
+/** A line short enough to be a chapter title rather than prose. */
+function isChapterHeading(line: string): boolean {
+  if (!line || line.length > 80) return false;
+  if (CJK_CHAPTER_HEADING.test(line) || LATIN_CHAPTER_HEADING.test(line)) return true;
+  return line.startsWith('#');
+}
+
 /**
- * Parse plain text files into chapters
+ * Parse plain text files into chapters.
+ *
+ * Paragraph structure is preserved with blank lines as separators. CJK text
+ * additionally treats every line as a paragraph, matching how Chinese novels
+ * are distributed; `textToHtml` makes the same distinction when rendering.
  */
 export function parseTxt(text: string, title = 'Untitled Document', author = 'Unknown'): Book {
-  // Regex to detect chapter breaks
-  const chapterRegex = /(?:^|\n\s*\n)(?:chapter\s+\d+|chapter\s+[ivxlcdm]+|section\s+\d+|part\s+[ivxlcdm]+|\b第[0-9一二三四五六七八九十百千]+[章回节]|#+\s+.+)(?:[^\n]*)/gi;
+  const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+  const lines = normalized.split('\n');
 
   const chapters: Chapter[] = [];
-  const lines = text.split('\n');
-
   let currentTitle = 'Introduction';
-  let currentContent: string[] = [];
+  let paragraphs: string[] = [];
+  let block: string[] = [];
   let chapterIndex = 1;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    const isHeading =
-      /^(chapter\s+\d+|chapter\s+[ivxlcdm]+|section\s+\d+|part\s+[ivxlcdm]+|\b第[0-9一二三四五六七八九十百千]+[章回节])/i.test(line) ||
-      (line.startsWith('#') && line.length < 80);
+  const flushBlock = () => {
+    if (block.length === 0) return;
+    paragraphs.push(block.join('\n'));
+    block = [];
+  };
 
-    if (isHeading && currentContent.length > 20) {
-      chapters.push({
-        id: `chap_${chapterIndex++}`,
-        title: currentTitle,
-        content: currentContent.join('\n\n'),
-        wordCount: currentContent.join(' ').split(/\s+/).length,
-      });
-      currentTitle = line.replace(/^#+\s*/, '');
-      currentContent = [];
-    } else if (line.length > 0) {
-      currentContent.push(line);
-    }
-  }
-
-  if (currentContent.length > 0) {
+  const flushChapter = () => {
+    flushBlock();
+    if (paragraphs.length === 0) return;
+    const content = paragraphs.join('\n\n');
     chapters.push({
-      id: `chap_${chapterIndex}`,
+      id: `chap_${chapterIndex++}`,
       title: currentTitle,
-      content: currentContent.join('\n\n'),
-      wordCount: currentContent.join(' ').split(/\s+/).length,
+      content,
+      wordCount: countWords(content),
     });
+    paragraphs = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      // A blank line ends the current paragraph.
+      flushBlock();
+      continue;
+    }
+    if (isChapterHeading(line)) {
+      flushChapter();
+      currentTitle = line.replace(/^#+\s*/, '');
+      continue;
+    }
+    block.push(line);
   }
+  flushChapter();
 
   // If no chapters detected, split into readable chunks. Latin / spaced text
-  // chunks by words; dense CJK text (little whitespace) chunks by characters
-  // so the whole book never becomes a single unwieldy "section".
+  // chunks by words; dense CJK text chunks by characters so the whole book
+  // never becomes a single unwieldy "section".
   if (chapters.length <= 1) {
-    const tokens = text.split(/\s+/).filter(Boolean).length;
-    const chars = text.length;
-    const spaceRatio = tokens / Math.max(1, chars);
-    const fallbackChapters =
-      spaceRatio < 0.25
-        ? chunkByChars(text, 1400)
-        : chunkByWords(text, 1000);
+    const fallbackChapters = isCjkDominant(normalized)
+      ? chunkByChars(normalized, 1400)
+      : chunkByWords(normalized, 1000);
 
     return {
       id: `txt_${Date.now()}`,
@@ -154,13 +194,17 @@ export function parseTxt(text: string, title = 'Untitled Document', author = 'Un
       author,
       format: 'txt',
       rawText: text,
-      chapters: fallbackChapters.length > 0 ? fallbackChapters : [{ id: 'chap_1', title: 'Content', content: text }],
+      chapters:
+        fallbackChapters.length > 0
+          ? fallbackChapters
+          : [{ id: 'chap_1', title: 'Content', content: text, wordCount: countWords(text) }],
       totalChapters: fallbackChapters.length || 1,
       currentChapterIndex: 0,
       currentPage: 1,
       totalPages: fallbackChapters.length || 1,
       lastReadTimestamp: Date.now(),
       bookmarks: [],
+      parserRevision: TXT_PARSER_REVISION,
     };
   }
 
@@ -177,6 +221,7 @@ export function parseTxt(text: string, title = 'Untitled Document', author = 'Un
     totalPages: chapters.length,
     lastReadTimestamp: Date.now(),
     bookmarks: [],
+    parserRevision: TXT_PARSER_REVISION,
   };
 }
 

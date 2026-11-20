@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import {
   X,
   Type,
@@ -12,6 +12,7 @@ import {
   Maximize,
   Info,
   Timer,
+  Clock,
   PanelBottom,
   Gauge,
   Library,
@@ -30,6 +31,8 @@ import {
 import { useI18n } from '../i18n';
 import { SafeSlider } from './SafeSlider';
 import { resolvePanelType } from '../services/displayInfo';
+import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio';
+import { snapPixelFontSize } from '../utils/pixelFont';
 
 interface QuickSettingsDrawerProps {
   isOpen: boolean;
@@ -49,11 +52,39 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
   onOpenTutorial,
 }) => {
   const { t, lang, setLang } = useI18n();
+  const dpr = useDevicePixelRatio();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // The panel's DOM is removed while the drawer is closed, so the offset is
+  // kept on the component instance and restored before the first paint on
+  // reopen — otherwise every open jumps back to the top of the list.
+  const savedScrollTop = useRef(0);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    if (scrollRef.current) scrollRef.current.scrollTop = savedScrollTop.current;
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const panelType = resolvePanelType(settings.screenPanel);
   const oledBlocked = panelType !== 'oled';
+  const isPixelFont = settings.fontFamily === 'pixel1' || settings.fontFamily === 'pixel2';
+  // Canvas mode can draw any requested size on a phase-locked grid, so the
+  // stored font size is exactly what the reader sees; the legacy DOM path
+  // still snaps to the 13px em grid.
+  const canvasActive =
+    isPixelFont &&
+    !isComic &&
+    settings.readingMode !== 'continuous' &&
+    settings.pixelCanvas !== false;
+  // Without the canvas the size is snapped to the CJK face's 13-px em grid,
+  // so the value stored in settings can differ from what is actually drawn.
+  // Show both, otherwise dragging the slider looks like it does nothing
+  // until the next grid step.
+  const effectiveFontSize =
+    isPixelFont && !canvasActive
+      ? snapPixelFontSize(settings.fontSize, dpr)
+      : settings.fontSize;
 
   const themes: { id: ReaderTheme; label: string; bg: string; text: string; desc: string }[] = [
     {
@@ -98,6 +129,13 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
       text: 'text-[#0f380f]',
       desc: t('settings.themeGbaDesc'),
     },
+    {
+      id: 'gbp',
+      label: t('settings.themeGbp'),
+      bg: 'bg-[#b8bcb0] border-neutral-500',
+      text: 'text-[#2b2f28]',
+      desc: t('settings.themeGbpDesc'),
+    },
   ];
 
   const fonts: { id: ReaderSettings['fontFamily']; label: string }[] = [
@@ -121,8 +159,12 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
       onClick={onClose}
     >
       <div
+        ref={scrollRef}
         className="bg-neutral-900 border-l border-neutral-800 w-full max-w-sm h-full flex flex-col shadow-2xl text-neutral-100 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
+        onScroll={(e) => {
+          savedScrollTop.current = e.currentTarget.scrollTop;
+        }}
       >
         {/* Header */}
         <div
@@ -273,6 +315,40 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               </div>
               <p className="text-[10px] text-neutral-500 leading-relaxed">
                 {t('settings.screenPanelDesc')}
+              </p>
+            </div>
+
+            {/* Screen sleep timer (keep awake while reading) */}
+            <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2">
+              <div className="flex items-center justify-between text-xs text-neutral-300">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  {t('settings.screenSleep')}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {([2, 5, 10, 0] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => onUpdateSettings({ screenSleepMinutes: m })}
+                    className={`py-2 rounded-lg border text-[11px] font-bold transition-all ${
+                      settings.screenSleepMinutes === m
+                        ? 'bg-amber-500 text-neutral-950 border-amber-400'
+                        : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                    }`}
+                  >
+                    {m === 2
+                      ? t('settings.screenSleep2')
+                      : m === 5
+                        ? t('settings.screenSleep5')
+                        : m === 10
+                          ? t('settings.screenSleep10')
+                          : t('settings.screenSleepOff')}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-neutral-500 leading-relaxed">
+                {t('settings.screenSleepDesc')}
               </p>
             </div>
 
@@ -619,7 +695,11 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               <div className="space-y-2">
                 <div className="flex justify-between text-xs text-neutral-400">
                   <span>{t('settings.fontSize')}</span>
-                  <span className="font-mono text-amber-400 font-bold">{settings.fontSize}px</span>
+                  <span className="font-mono text-amber-400 font-bold">
+                    {isPixelFont && effectiveFontSize !== settings.fontSize
+                      ? `${settings.fontSize} → ${effectiveFontSize}px`
+                      : `${effectiveFontSize}px`}
+                  </span>
                 </div>
                 <SafeSlider
                   min={13}
@@ -629,6 +709,30 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
                   onChange={(v) => onUpdateSettings({ fontSize: Math.round(v) })}
                 />
               </div>
+
+              {/* Canvas dot-matrix repaint (pixel faces only) */}
+              {isPixelFont && !isComic && settings.readingMode !== 'continuous' && (
+                <label
+                  className="flex items-center justify-between gap-3 p-3 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer hover:border-neutral-700"
+                  title={t('settings.pixelCanvasDesc')}
+                >
+                  <div className="space-y-1 min-w-0">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200">
+                      <Scaling className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      {t('settings.pixelCanvas')}
+                    </span>
+                    <span className="block text-[10px] text-neutral-500 leading-relaxed">
+                      {t('settings.pixelCanvasDesc')}
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={canvasActive}
+                    onChange={(e) => onUpdateSettings({ pixelCanvas: e.target.checked })}
+                    className="w-5 h-5 rounded accent-amber-400 cursor-pointer shrink-0"
+                  />
+                </label>
+              )}
 
               {/* Line Spacing */}
               <div className="space-y-2">

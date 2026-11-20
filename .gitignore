@@ -3,6 +3,8 @@ node_modules/
 build/
 dist/
 coverage/
+dev-dist/
+Release/
 
 # --- environment ---
 .env*

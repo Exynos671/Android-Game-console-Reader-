@@ -289,12 +289,12 @@ export const ShelfManagerModal: React.FC<ShelfManagerModalProps> = ({
         {/* Categories */}
         <div className="space-y-2.5">
           <label className="text-xs font-semibold text-neutral-400">{t('lib.categories')}</label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t('lib.newCategoryName')}
-              className="flex-1 px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-700 text-xs text-neutral-100 placeholder-neutral-500 outline-none focus:border-amber-500/60"
+              className="min-w-0 grow basis-32 px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-700 text-xs text-neutral-100 placeholder-neutral-500 outline-none focus:border-amber-500/60"
             />
             <button
               data-nav-id="act:create"
@@ -304,7 +304,7 @@ export const ShelfManagerModal: React.FC<ShelfManagerModalProps> = ({
                 setName('');
               }}
               disabled={!name.trim()}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold disabled:opacity-40 hh-focusable"
+              className="ml-auto shrink-0 whitespace-nowrap px-3 sm:px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold disabled:opacity-40 hh-focusable"
             >
               {t('lib.addCategory')}
             </button>

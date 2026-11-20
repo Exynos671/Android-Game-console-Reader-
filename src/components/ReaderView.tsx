@@ -38,6 +38,7 @@ import {
   canCanvasEmboss,
   lcdCellSize,
   lcdInkAlpha,
+  PIXEL_LATIN_EM_PX,
 } from '../utils/pixelFont';
 import { useI18n } from '../i18n';
 
@@ -1001,11 +1002,15 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
 
     // Grid-aligned heading size for the dot-matrix themes (consumed by the
     // `.hh-pixel-text h1…h4` rules in index.css). `--hh-lcd-px` is one
-    // physical device pixel, used for the LCD pixel shadow offset, and
-    // `--hh-lcd-cell` is one font design pixel, used as the LCD cell pitch.
+    // physical device pixel, used for the LCD pixel shadow offset.
+    // `--hh-lcd-cell` is one design pixel of the Latin pixel face, i.e. the
+    // pitch of the dots the reader actually sees, snapped to whole device
+    // pixels so the mesh stays sharp.
     const lcdStyle = {
       '--hh-lcd-px': `${1 / (dpr || 1)}px`,
-      '--hh-lcd-cell': `${lcdCellSize(isPixelFont ? readingFontSize : 0, dpr)}px`,
+      '--hh-lcd-cell': `${
+        lcdCellSize(isPixelFont ? readingFontSize : 0, dpr, PIXEL_LATIN_EM_PX)
+      }px`,
       '--hh-lcd-ink-alpha': lcdInkAlpha(dpr).toFixed(3),
     } as React.CSSProperties;
     const canvasStyle = {

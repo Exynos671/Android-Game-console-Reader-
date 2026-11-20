@@ -391,9 +391,11 @@ body {
    GBA / GBP LCD panel grain.
    A real dot-matrix panel is a continuous mesh: one dark gap
    between every two pixel cells, not isolated dots. The cell
-   pitch comes from the reading font (one cell per font design
-   pixel, see `lcdCellSize`) so the grain matches the stroke
-   grid, and both lines are exactly one *device* pixel wide.
+   pitch is one design pixel of the Latin pixel face (see
+   `lcdCellSize`), snapped to whole device pixels, so the grain
+   reads at the same dot size as the letters instead of
+   disappearing into a finer texture; both lines are exactly one
+   *device* pixel wide.
    ============================================================ */
 .hh-gba-pixels,
 .hh-gbp-pixels {

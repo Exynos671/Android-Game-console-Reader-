@@ -11,6 +11,9 @@
 /** Design pixels per em for the bundled HanYi pixel face. */
 export const PIXEL_EM_PX = 13;
 
+/** Design pixels per em for the Latin pixel faces (Press Start 2P, Silkscreen). */
+export const PIXEL_LATIN_EM_PX = 8;
+
 /** Retina-class panels only. On anything below ~300 ppi a one-device-pixel
  *  ghost is physically too coarse and the snapped strokes gain visible
  *  weight, so the theme keeps its dot-matrix background but drops the
@@ -123,12 +126,29 @@ export function canCanvasEmboss(fontSize: number, dpr: number): boolean {
   return designPx >= MIN_EMBOSS_DEVICE_PX - 0.01;
 }
 
-/** LCD cell size in CSS px: one cell per font design pixel, but never
- *  smaller than 3 device px or the dark gaps would swamp the cell itself. */
-export function lcdCellSize(fontSize: number, dpr: number): number {
+/**
+ * LCD cell size in CSS px: one cell per design pixel of the active dot-matrix
+ * face, landed on a whole number of *device* pixels (a fractional pitch blurs
+ * the one-device-pixel gaps), but never smaller than 3 device px or the dark
+ * gaps would swamp the cell itself.
+ *
+ * `designEm` decides which face sets the visible dot size. The reader passes
+ * the Latin em (8) for the pixel fonts: their glyph pips are what reads as
+ * "the dot" on screen, and matching the HanYi 13-px grid instead made the
+ * background mesh noticeably finer than the letters.
+ */
+export function lcdCellSize(
+  fontSize: number,
+  dpr: number,
+  designEm: number = PIXEL_EM_PX
+): number {
   const density = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
-  const glyphCell = Number.isFinite(fontSize) && fontSize > 0 ? fontSize / PIXEL_EM_PX : 0;
-  return Math.max(3 / density, glyphCell);
+  const em = Number.isFinite(designEm) && designEm > 0 ? designEm : PIXEL_EM_PX;
+  const glyphCell =
+    Number.isFinite(fontSize) && fontSize > 0 ? (fontSize * density) / em : 0;
+  // +epsilon keeps exact halves (e.g. 4.5 device px) rounding up instead of
+  // flipping down because of float error in the incoming CSS size.
+  return Math.max(3, Math.round(glyphCell + 1e-6)) / density;
 }
 
 /** Line opacity for the LCD mesh. A one-device-pixel line is physically

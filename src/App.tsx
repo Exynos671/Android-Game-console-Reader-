@@ -11,6 +11,7 @@ import {
 } from './types';
 import { SAMPLE_BOOKS } from './data/sampleBooks';
 import { useGamepad } from './hooks/useGamepad';
+import { useScreenAwake, reportScreenActivity } from './hooks/useScreenAwake';
 import { useI18n } from './i18n';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView, ReaderViewHandle, BackHint } from './components/ReaderView';
@@ -47,6 +48,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   bottomBarFontSize: 'md',
   backDoublePressMs: 800,
   immersiveMode: true,
+  screenSleepMinutes: 2,
   uiTheme: 'night',
   uiScale: 'large',
   screenPanel: 'auto',
@@ -291,6 +293,10 @@ export default function App() {
 
   const activeBook = books.find((b) => b.id === activeBookId);
 
+  // Block the screen from sleeping while a book is open (configurable in the
+  // reading settings; "无 / None" keeps it awake indefinitely).
+  useScreenAwake(settings.screenSleepMinutes, Boolean(activeBook));
+
   const handleUpdateBook = useCallback(
     (updated: Partial<Book>) => {
       if (!activeBookId) return;
@@ -529,6 +535,7 @@ export default function App() {
   // Gamepad / keyboard action dispatcher
   const handleGamepadAction = useCallback(
     (action: ReaderAction) => {
+      reportScreenActivity();
       if (isControllerModalOpen) return;
       switch (action) {
         case 'nextPage':
@@ -675,6 +682,7 @@ export default function App() {
     onAction: handleGamepadAction,
     onRecordingPress: handleRecordingPress,
     onScroll: (deltaY) => {
+      reportScreenActivity();
       setScrollDeltaY(deltaY);
       setTimeout(() => setScrollDeltaY(0), 16);
     },

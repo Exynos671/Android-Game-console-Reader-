@@ -4,6 +4,7 @@ build/
 dist/
 coverage/
 dev-dist/
+Release/
 
 # --- environment ---
 .env*

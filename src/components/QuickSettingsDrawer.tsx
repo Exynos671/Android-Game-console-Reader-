@@ -12,6 +12,7 @@ import {
   Maximize,
   Info,
   Timer,
+  Clock,
   PanelBottom,
   Gauge,
   Library,
@@ -314,6 +315,40 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               </div>
               <p className="text-[10px] text-neutral-500 leading-relaxed">
                 {t('settings.screenPanelDesc')}
+              </p>
+            </div>
+
+            {/* Screen sleep timer (keep awake while reading) */}
+            <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2">
+              <div className="flex items-center justify-between text-xs text-neutral-300">
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  {t('settings.screenSleep')}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {([2, 5, 10, 0] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => onUpdateSettings({ screenSleepMinutes: m })}
+                    className={`py-2 rounded-lg border text-[11px] font-bold transition-all ${
+                      settings.screenSleepMinutes === m
+                        ? 'bg-amber-500 text-neutral-950 border-amber-400'
+                        : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                    }`}
+                  >
+                    {m === 2
+                      ? t('settings.screenSleep2')
+                      : m === 5
+                        ? t('settings.screenSleep5')
+                        : m === 10
+                          ? t('settings.screenSleep10')
+                          : t('settings.screenSleepOff')}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-neutral-500 leading-relaxed">
+                {t('settings.screenSleepDesc')}
               </p>
             </div>
 

@@ -24,6 +24,9 @@ export type ScreenPanel = 'auto' | 'oled' | 'lcd';
 /** What the bottom progress bar counts against. */
 export type BookProgressMode = 'chapter' | 'book';
 
+/** How long to block screen sleep while reading: 2 / 5 / 10 minutes, 0 = never sleep. */
+export type ScreenSleepMinutes = 0 | 2 | 5 | 10;
+
 export type ReaderFontFamily =
   | 'serif'
   | 'sans'
@@ -139,6 +142,7 @@ export interface ReaderSettings {
   bottomBarFontSize: 'xs' | 'sm' | 'md'; // size of the bottom info bar text
   backDoublePressMs: number; // double-press interval (ms) to exit a book
   immersiveMode: boolean; // hide the Android status/navigation bars
+  screenSleepMinutes: ScreenSleepMinutes; // block screen sleep while reading (0 = always on)
   uiTheme: UiTheme; // night (dark chrome) or day (light chrome)
   uiScale: UiScale; // global chrome size for small handheld screens
   screenPanel: ScreenPanel; // physical panel type (OLED guard)

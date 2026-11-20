@@ -405,45 +405,30 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {/* ================= Top bar ================= */}
       <header
         data-nav-zone="header"
-        className="z-20 bg-neutral-900/90 backdrop-blur border-b border-neutral-800 px-5 sm:px-8 safe-px shrink-0"
+        className="z-20 bg-neutral-900/90 backdrop-blur border-b border-neutral-800 safe-px-tight shrink-0"
         style={{
           paddingTop: 'calc(0.75rem + max(env(safe-area-inset-top, 0px), 0.5rem))',
           paddingBottom: '0.75rem',
         }}
       >
-        <div className="max-w-7xl mx-auto grid grid-cols-3 items-center gap-2">
-          <div className="flex items-center gap-1.5 justify-self-start">
-            <button
-              data-nav-id="act:lang"
-              onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-              className="p-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 hover:border-amber-500/50 hh-focusable transition-colors"
-              title={t('settings.language')}
-            >
-              <Languages className="w-5 h-5 text-amber-400" />
-            </button>
-            <button
-              data-nav-id="act:ui"
-              onClick={onToggleUiTheme}
-              className="p-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 hover:border-amber-500/50 hh-focusable transition-colors"
-              title={uiTheme === 'night' ? t('settings.dayMode') : t('settings.nightMode')}
-            >
-              {uiTheme === 'night' ? (
-                <Sun className="w-5 h-5 text-amber-400" />
-              ) : (
-                <Moon className="w-5 h-5 text-amber-400" />
-              )}
-            </button>
-          </div>
-
-          <div className="flex flex-col items-center justify-self-center min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
+        {/* On phones the title gets its own full-width row and the action
+            buttons share the row below: five buttons plus the app name
+            cannot fit in three equal columns (the nowrap title used to
+            spill over the help button, and the two button groups could
+            even overlap on 320px screens). From `md` up the original
+            [actions | title | actions] single row is restored, with equal
+            flexible side columns so a long app name and the import label
+            cannot push the buttons off-screen. */}
+        <div className="max-w-7xl mx-auto flex flex-col gap-2 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center">
+          <div className="order-1 flex flex-col items-center min-w-0 md:order-none md:col-start-2 md:row-start-1">
+            <div className="flex w-full items-center justify-center gap-2 min-w-0">
+              <div className="shrink-0 p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400">
                 <BookOpen className="w-5 h-5" />
               </div>
-              <h1 className="font-extrabold tracking-tight text-neutral-50 text-lg whitespace-nowrap">
+              <h1 className="font-extrabold tracking-tight text-neutral-50 text-lg truncate">
                 {lang === 'zh' ? t('common.appName') : t('common.appNameEn')}
               </h1>
-              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">
+              <span className="shrink-0 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">
                 {t('lib.versionBadge')}
               </span>
             </div>
@@ -455,52 +440,77 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 justify-self-end">
-            <button
-              data-nav-id="act:tutorial"
-              onClick={onOpenTutorial}
-              className="p-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-300 hover:text-amber-300 hover:border-amber-500/40 hh-focusable transition-colors"
-              title={t('lib.tutorial')}
-            >
-              <HelpCircle className="w-5 h-5 text-sky-400" />
-            </button>
-            <button
-              data-nav-id="act:controller"
-              onClick={onOpenControllerModal}
-              className={`p-2 rounded-xl border hh-focusable transition-all ${
-                connectedGamepadName
-                  ? 'bg-emerald-950/40 border-emerald-600/60 text-emerald-300'
-                  : 'bg-neutral-900 border-neutral-700 text-neutral-300 hover:border-neutral-600'
-              }`}
-              title={t('lib.controllerConfig')}
-            >
-              <Gamepad2 className="w-5 h-5 text-amber-400" />
-            </button>
-            <button
-              data-nav-id="act:import"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isImporting}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-md hh-focusable transition-colors disabled:opacity-50"
-            >
-              <Plus className="w-5 h-5" />
-              <span className="hidden md:inline">
-                {isImporting ? t('lib.importing') : t('lib.importBook')}
-              </span>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".epub,.cbz,.zip,.mobi,.txt,.pdf"
-              className="hidden"
-              onChange={(e) => {
-                const files: File[] = e.target.files
-                  ? Array.from(e.target.files as ArrayLike<File>)
-                  : [];
-                e.target.value = '';
-                if (files.length) handleFiles(files);
-              }}
-            />
+          <div className="order-2 flex flex-wrap items-center justify-between gap-2 md:order-none md:contents">
+            <div className="flex items-center gap-1.5 md:col-start-1 md:row-start-1 md:justify-self-start">
+              <button
+                data-nav-id="act:lang"
+                onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
+                className="p-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 hover:border-amber-500/50 hh-focusable transition-colors"
+                title={t('settings.language')}
+              >
+                <Languages className="w-5 h-5 text-amber-400" />
+              </button>
+              <button
+                data-nav-id="act:ui"
+                onClick={onToggleUiTheme}
+                className="p-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-200 hover:border-amber-500/50 hh-focusable transition-colors"
+                title={uiTheme === 'night' ? t('settings.dayMode') : t('settings.nightMode')}
+              >
+                {uiTheme === 'night' ? (
+                  <Sun className="w-5 h-5 text-amber-400" />
+                ) : (
+                  <Moon className="w-5 h-5 text-amber-400" />
+                )}
+              </button>
+            </div>
+
+            <div className="ms-auto flex items-center gap-1.5 md:col-start-3 md:row-start-1 md:justify-self-end">
+              <button
+                data-nav-id="act:tutorial"
+                onClick={onOpenTutorial}
+                className="p-2 rounded-xl bg-neutral-900 border border-neutral-700 text-neutral-300 hover:text-amber-300 hover:border-amber-500/40 hh-focusable transition-colors"
+                title={t('lib.tutorial')}
+              >
+                <HelpCircle className="w-5 h-5 text-sky-400" />
+              </button>
+              <button
+                data-nav-id="act:controller"
+                onClick={onOpenControllerModal}
+                className={`p-2 rounded-xl border hh-focusable transition-all ${
+                  connectedGamepadName
+                    ? 'bg-emerald-950/40 border-emerald-600/60 text-emerald-300'
+                    : 'bg-neutral-900 border-neutral-700 text-neutral-300 hover:border-neutral-600'
+                }`}
+                title={t('lib.controllerConfig')}
+              >
+                <Gamepad2 className="w-5 h-5 text-amber-400" />
+              </button>
+              <button
+                data-nav-id="act:import"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm whitespace-nowrap shadow-md hh-focusable transition-colors disabled:opacity-50"
+              >
+                <Plus className="w-5 h-5" />
+                <span className="hidden lg:inline">
+                  {isImporting ? t('lib.importing') : t('lib.importBook')}
+                </span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".epub,.cbz,.zip,.mobi,.txt,.pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const files: File[] = e.target.files
+                    ? Array.from(e.target.files as ArrayLike<File>)
+                    : [];
+                  e.target.value = '';
+                  if (files.length) handleFiles(files);
+                }}
+              />
+            </div>
           </div>
         </div>
       </header>

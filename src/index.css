@@ -146,6 +146,19 @@ body {
   padding-left: calc(env(safe-area-inset-left, 0px) + 1.5rem);
   padding-right: calc(env(safe-area-inset-right, 0px) + 1.5rem);
 }
+/* Dense chrome (the library header) keeps the safe-area inset but uses a
+   narrower gutter on phones, where five action buttons and the title have
+   to share the width. Wider screens restore the regular gutter. */
+.safe-px-tight {
+  padding-left: calc(env(safe-area-inset-left, 0px) + 0.75rem);
+  padding-right: calc(env(safe-area-inset-right, 0px) + 0.75rem);
+}
+@media (min-width: 640px) {
+  .safe-px-tight {
+    padding-left: calc(env(safe-area-inset-left, 0px) + 1.5rem);
+    padding-right: calc(env(safe-area-inset-right, 0px) + 1.5rem);
+  }
+}
 
 /* Bars anchored to the top/bottom of an edge-to-edge screen:
    background bleeds under the system bars while the inner row

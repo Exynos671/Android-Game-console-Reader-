@@ -924,22 +924,27 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
     const edgeBottom = 'max(env(safe-area-inset-bottom, 0px), 0.75rem)';
 
     const isPagedCanvas = isPagedText || isSinglePageComic;
+
+    // Bottom reserve for the persistent status strip. Deliberately ignores
+    // `hudVisible`: the canvas height must stay identical while the menu opens
+    // and closes, otherwise the multi-column paginator recomputes and the
+    // reader visibly reflows on every tap. The menu bars simply overlay the
+    // page while they are open.
+    const stripReservePx =
+      !settings.distractionFree && settings.showHudTimeAndBattery
+        ? stripFontPx + 40
+        : 0;
+
     const canvasPadStyle: React.CSSProperties = isPagedCanvas
       ? {
           paddingTop: `calc(2.25rem + ${edgeTop})`,
-          paddingBottom: hudVisible
-            ? `calc(3.25rem + ${edgeBottom})`
-            : showStatusStrip
-              ? `calc(${stripFontPx + 40}px + ${edgeBottom})`
-              : `calc(1.5rem + ${edgeBottom})`,
+          paddingBottom: `calc(${
+            stripReservePx > 0 ? `${stripReservePx}px` : '1.5rem'
+          } + ${edgeBottom})`,
         }
       : {
-          paddingTop: hudVisible ? `calc(3.5rem + ${edgeTop})` : edgeTop,
-          paddingBottom: hudVisible
-            ? `calc(4rem + ${edgeBottom})`
-            : showStatusStrip
-              ? `calc(${stripFontPx + 40}px + ${edgeBottom})`
-              : edgeBottom,
+          paddingTop: edgeTop,
+          paddingBottom: `calc(${stripReservePx}px + ${edgeBottom})`,
         };
 
     // Grid-aligned heading size for the dot-matrix themes (consumed by the

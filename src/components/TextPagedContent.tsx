@@ -8,6 +8,7 @@ import React, {
 import { PageTurnAnimation } from '../types';
 import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio';
 import { snapDevicePx } from '../utils/pixelFont';
+import { PixelCanvasText } from './PixelCanvasText';
 
 export type PageTurnAnimationKind = PageTurnAnimation;
 export type PageMarginSize = 'compact' | 'balanced' | 'relaxed';
@@ -26,6 +27,12 @@ export interface TextPagedContentProps {
   animation: PageTurnAnimationKind;
   /** Duration of the slide / fade animation in ms. */
   speedMs?: number;
+  /** Repaint the visible glyphs through the canvas dot-matrix layer. */
+  pixelCanvas?: boolean;
+  /** Paint the LCD ghost in canvas mode (dense panels only). */
+  pixelLcdGhost?: boolean;
+  /** Any theme / font change that should invalidate painted canvases. */
+  canvasRepaintKey?: string;
   /** Reports how many pages the current reflow produced. */
   onPageCountChange?: (count: number) => void;
 }
@@ -54,6 +61,9 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
   marginSize,
   animation,
   speedMs = 500,
+  pixelCanvas = false,
+  pixelLcdGhost = false,
+  canvasRepaintKey,
   onPageCountChange,
 }) => {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -62,6 +72,12 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
   const sentinelRef = useRef<HTMLSpanElement>(null);
 
   const [pageCount, setPageCount] = useState(1);
+  // Canvas layer geometry (CSS px) of one page column.
+  const [pageBox, setPageBox] = useState({ w: 0, h: 0 });
+  // Bumped after every successful reflow. Canvas glyphs are placed from DOM
+  // ranges, so a re-measure (font swap, chapter change, resize) can move
+  // every character even when the page box itself did not change.
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
   const stepRef = useRef(0);
   const pageRef = useRef(page);
   const htmlRef = useRef(html);
@@ -100,6 +116,10 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
     const contentW = Math.max(40, Math.floor((rawW - insetX * 2) * unit) / unit);
     const contentH = Math.max(40, Math.floor((rawH - insetY * 2) * unit) / unit);
     if (!contentW || !contentH) return false;
+
+    setPageBox((prev) =>
+      prev.w === contentW && prev.h === contentH ? prev : { w: contentW, h: contentH }
+    );
 
     // Clip to the exact snapped page box, otherwise the <1px difference
     // between the inset viewport and the floored column width could let a
@@ -142,6 +162,7 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
     stepRef.current = contentW;
     measuredOnceRef.current = true;
     setPageCount((prev) => (prev !== count ? count : prev));
+    setLayoutEpoch((epoch) => epoch + 1);
     return true;
   }, [html, fontSize, lineHeight, fontFamilyClass, insetX, insetY, dpr, pixelPerfect]);
 
@@ -280,6 +301,23 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
           }}
         >
           <div dangerouslySetInnerHTML={{ __html: html }} />
+          {pixelCanvas && (
+            <PixelCanvasText
+              sheetRef={sheetRef}
+              page={page}
+              pageCount={pageCount}
+              contentW={pageBox.w}
+              contentH={pageBox.h}
+              html={html}
+              dpr={dpr}
+              enabled={pixelCanvas}
+              lcdGhost={pixelLcdGhost}
+              repaintKey={
+                `${canvasRepaintKey ?? `${fontFamilyClass}|${fontSize}|${lineHeight}|${dpr}`}|` +
+                `${layoutEpoch}`
+              }
+            />
+          )}
           {/* Block-level end marker: an inline marker gets a full line box
               (~line-height tall) even at the very top of a new column, so
               a chapter that ended exactly at the bottom of a page was

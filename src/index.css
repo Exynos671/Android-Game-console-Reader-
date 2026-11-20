@@ -53,7 +53,7 @@ body {
   font-weight: 400;
   font-display: swap;
 }
-/* Press Start 2P / Silkscreen only ship Latin glyphs, so Chinese characters
+/* Press Start 2P / Silkscreen do not ship CJK glyphs, so Chinese characters
    must fall through to the bundled HanYi pixel face instead of a smooth CJK
    font — otherwise the "dot-matrix" options look like normal text. */
 .font-pixel1 {
@@ -66,39 +66,75 @@ body {
     'Microsoft YaHei', monospace;
   letter-spacing: 0.02em;
 }
-/* Chinese pixel face used by the retro handheld themes by default */
-.font-gba,
-.font-gbp {
-  font-family: 'HanYi Pixel 11', 'Silkscreen', 'Press Start 2P', 'Noto Sans SC', monospace;
-  letter-spacing: 0.02em;
-}
 
 /* ============================================================
    Dot-matrix typography.
    The pixel faces are only razor sharp when each design pixel
-   maps onto whole device pixels, so smoothing / kerning /
-   fractional letter-spacing are switched off and the reading
-   font size is snapped to the face's em grid in JS.
+   maps onto a whole number of device pixels, so kerning /
+   ligatures / fractional letter-spacing are switched off and
+   the reading font size is always snapped to the face's 13-px
+   em grid in JS (13/26/39… device px per em). That snap applies
+   at every density: an 18px size on a 1x panel gives 1.386
+   device px per design pixel and splits the (uniform) 1px
+   strokes across two raster rows by different amounts, which
+   reads as uneven weight.
+
+   Two independent modifiers are added from ReaderView:
+
+   .hh-pixel-snapped   the em lands on whole device pixels, so
+                       grayscale AA / hinting can be disabled
+                       without blurring the glyph edges.
+   .hh-pixel-embossed  a one-device-pixel LCD ghost fits inside
+                       a design pixel, i.e. the panel is dense
+                       enough for the effect to read as a cell
+                       edge instead of extra stroke weight.
+
+   On <300 ppi panels (320x240 / 640x480 handhelds etc.) the
+   pixel face and the LCD background/grain are kept, and the
+   size is still grid-snapped so all strokes keep the same
+   weight, but the modifiers are not applied: hinting and
+   grayscale AA stay on, and no shadow is drawn.
    ============================================================ */
 .hh-pixel-text {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: geometricPrecision;
+  text-rendering: auto;
   font-kerning: none;
   font-variant-ligatures: none;
   font-feature-settings: 'kern' 0, 'liga' 0, 'clig' 0, 'calt' 0;
   font-synthesis: none;
   letter-spacing: 0;
 }
-/* Only applied when the snapped size maps a design pixel onto a whole
-   number of device pixels; then AA can be switched off safely. On 1x
-   screens the remaining half-pixel is left to grayscale AA so strokes keep
-   a uniform weight instead of alternating 1px / 2px. */
+/* Canvas dot-matrix layer: the DOM keeps line breaking, columns, selection
+   and decorations, while the canvas repaints every glyph on the native design
+   grid of the face the browser selected from the same font stack. Hide only
+   the glyph fill (`currentColor` stays available for list markers, borders
+   and text-decoration) and drop the CSS LCD shadow, which the canvas draws
+   itself. */
+.hh-pixel-canvas {
+  -webkit-text-fill-color: transparent;
+  text-shadow: none !important;
+}
+/* Canvas ink is painted above the page, so the browser's default dark
+   selection bar would sit behind dark glyphs and hide them. A light wash
+   keeps the selected text readable; the DOM fill stays transparent. */
+.hh-pixel-canvas::selection,
+.hh-pixel-canvas ::selection {
+  background: rgba(255, 196, 0, 0.35);
+}
+/* Only applied on a >= 300 ppi panel, where the integer grid also has
+   enough device pixels per design pixel. `-webkit-font-smoothing: none`
+   is honoured by Chromium/WebKit on macOS; other platforms ignore it, but
+   there the integer scale already keeps AA fringes below ~0.1px. */
 .hh-pixel-snapped {
   -webkit-font-smoothing: none;
-  /* Faint ghost one *physical* pixel below / right of every lit pixel,
-     like a reflective LCD cell. The offset variable is set from the
-     reader's devicePixelRatio, so it is exactly one screen pixel. */
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+/* Faint ghost one *physical* pixel below / right of every lit pixel,
+   like a reflective LCD cell. The offset variable is set from the
+   reader's devicePixelRatio, so it is exactly one screen pixel.
+   Disabled when a design pixel is smaller than three device pixels:
+   there the ghost lands on a half cell and thickens every stroke. */
+.hh-pixel-embossed {
   text-shadow:
     0 var(--hh-lcd-px, 0.5px) 0 var(--hh-lcd-ghost, transparent),
     var(--hh-lcd-px, 0.5px) var(--hh-lcd-px, 0.5px) 0

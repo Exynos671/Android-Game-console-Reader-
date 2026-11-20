@@ -30,6 +30,8 @@ import {
 import { useI18n } from '../i18n';
 import { SafeSlider } from './SafeSlider';
 import { resolvePanelType } from '../services/displayInfo';
+import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio';
+import { snapPixelFontSize } from '../utils/pixelFont';
 
 interface QuickSettingsDrawerProps {
   isOpen: boolean;
@@ -49,11 +51,29 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
   onOpenTutorial,
 }) => {
   const { t, lang, setLang } = useI18n();
+  const dpr = useDevicePixelRatio();
 
   if (!isOpen) return null;
 
   const panelType = resolvePanelType(settings.screenPanel);
   const oledBlocked = panelType !== 'oled';
+  const isPixelFont = settings.fontFamily === 'pixel1' || settings.fontFamily === 'pixel2';
+  // Canvas mode can draw any requested size on a phase-locked grid, so the
+  // stored font size is exactly what the reader sees; the legacy DOM path
+  // still snaps to the 13px em grid.
+  const canvasActive =
+    isPixelFont &&
+    !isComic &&
+    settings.readingMode !== 'continuous' &&
+    settings.pixelCanvas !== false;
+  // Without the canvas the size is snapped to the CJK face's 13-px em grid,
+  // so the value stored in settings can differ from what is actually drawn.
+  // Show both, otherwise dragging the slider looks like it does nothing
+  // until the next grid step.
+  const effectiveFontSize =
+    isPixelFont && !canvasActive
+      ? snapPixelFontSize(settings.fontSize, dpr)
+      : settings.fontSize;
 
   const themes: { id: ReaderTheme; label: string; bg: string; text: string; desc: string }[] = [
     {
@@ -626,7 +646,11 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
               <div className="space-y-2">
                 <div className="flex justify-between text-xs text-neutral-400">
                   <span>{t('settings.fontSize')}</span>
-                  <span className="font-mono text-amber-400 font-bold">{settings.fontSize}px</span>
+                  <span className="font-mono text-amber-400 font-bold">
+                    {isPixelFont && effectiveFontSize !== settings.fontSize
+                      ? `${settings.fontSize} → ${effectiveFontSize}px`
+                      : `${effectiveFontSize}px`}
+                  </span>
                 </div>
                 <SafeSlider
                   min={13}
@@ -636,6 +660,30 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
                   onChange={(v) => onUpdateSettings({ fontSize: Math.round(v) })}
                 />
               </div>
+
+              {/* Canvas dot-matrix repaint (pixel faces only) */}
+              {isPixelFont && !isComic && settings.readingMode !== 'continuous' && (
+                <label
+                  className="flex items-center justify-between gap-3 p-3 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer hover:border-neutral-700"
+                  title={t('settings.pixelCanvasDesc')}
+                >
+                  <div className="space-y-1 min-w-0">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200">
+                      <Scaling className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      {t('settings.pixelCanvas')}
+                    </span>
+                    <span className="block text-[10px] text-neutral-500 leading-relaxed">
+                      {t('settings.pixelCanvasDesc')}
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={canvasActive}
+                    onChange={(e) => onUpdateSettings({ pixelCanvas: e.target.checked })}
+                    className="w-5 h-5 rounded accent-amber-400 cursor-pointer shrink-0"
+                  />
+                </label>
+              )}
 
               {/* Line Spacing */}
               <div className="space-y-2">

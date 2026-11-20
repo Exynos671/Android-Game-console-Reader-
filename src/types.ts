@@ -122,6 +122,8 @@ export interface ReaderSettings {
   fontSize: number; // in px
   lineHeight: number; // 1.2 to 2.2
   fontFamily: ReaderFontFamily;
+  /** Repaint pixel-font glyphs through the canvas dot-matrix layer. */
+  pixelCanvas: boolean;
   theme: ReaderTheme;
   readingMode: ReadingMode;
   distractionFree: boolean;

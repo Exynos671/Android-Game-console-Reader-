@@ -33,6 +33,9 @@ import {
   snapPixelFontSize,
   snapPixelLineHeight,
   isPixelCrisp,
+  canSharpenPixelText,
+  canEmbossPixelText,
+  canCanvasEmboss,
   lcdCellSize,
   lcdInkAlpha,
 } from '../utils/pixelFont';
@@ -103,9 +106,11 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
     // Dot-matrix typography depends on the physical pixel density: the
     // reading size is snapped so one font pixel = whole device pixels.
     const dpr = useDevicePixelRatio();
-    const isPixelTheme = settings.theme === 'gba' || settings.theme === 'gbp';
+    // A dot-matrix face is only used when it is picked explicitly in the
+    // font-style picker. The GBA/GBP themes restyle the page (palette + LCD
+    // mesh) but never override the reader's font choice.
     const isPixelFont =
-      isPixelTheme || settings.fontFamily === 'pixel1' || settings.fontFamily === 'pixel2';
+      settings.fontFamily === 'pixel1' || settings.fontFamily === 'pixel2';
 
     // Reading chrome (top bar + bottom controls). Clean by default 鈥?page
     // turns never pop menus open; only Start / screen tap toggles it.
@@ -127,6 +132,14 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
       : book.chapters?.length || 1;
 
     const isPagedText = !isComic && settings.readingMode !== 'continuous';
+    // Canvas dot-matrix mode: the DOM still lays the text out (line breaks,
+    // justification, columns, page count), but every glyph is repainted from
+    // a 1-bit atlas on each face's native grid with phase-locked row bands.
+    // That removes the fractional-scale stroke-weight wobble without
+    // changing pagination.
+    // Continuous scroll has no page canvases, so it keeps the snapped DOM
+    // renderer instead of showing an unsnapped pixel face.
+    const pixelCanvas = isPixelFont && isPagedText && settings.pixelCanvas !== false;
     const isWebtoon = isComic && settings.readingMode === 'webtoon';
     const isSinglePageComic = isComic && !isWebtoon;
 
@@ -711,22 +724,45 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
       }
     }, [settings.theme]);
 
-    // Dot-matrix text is drawn on a fixed grid, so an arbitrary font size
-    // (e.g. 18px at DPR 2.75) makes every glyph edge fall between device
-    // pixels and the browser blurs it. Snap to the nearest grid step and
-    // keep line boxes on whole device pixels as well.
-    const readingFontSize = useMemo(
-      () => (isPixelFont ? snapPixelFontSize(settings.fontSize, dpr) : settings.fontSize),
-      [isPixelFont, settings.fontSize, dpr]
-    );
+    // The CJK pixel face is outlined on a fixed 13-px design grid (the Latin
+    // faces use 8px, so no single size is perfect for both). Without the
+    // canvas layer an arbitrary font size (e.g. 18px at DPR 1, i.e. 1.386
+    // device pixels per design pixel) splits every 1px stroke across two
+    // raster rows with a different coverage split per stroke — that is what
+    // reads as uneven stroke weight, so the size is snapped to the grid.
+    // Canvas mode keeps the requested size: the overlay locks every band to
+    // the same subpixel phase, so 18px is safe and the slider stays honest.
+    const readingFontSize = useMemo(() => {
+      if (!isPixelFont) return settings.fontSize;
+      return pixelCanvas
+        ? settings.fontSize
+        : snapPixelFontSize(settings.fontSize, dpr);
+    }, [isPixelFont, pixelCanvas, settings.fontSize, dpr]);
     const pixelCrisp = useMemo(
-      () => isPixelFont && isPixelCrisp(readingFontSize, dpr),
-      [isPixelFont, readingFontSize, dpr]
+      () => !pixelCanvas && isPixelFont && canSharpenPixelText(dpr) && isPixelCrisp(readingFontSize, dpr),
+      [pixelCanvas, isPixelFont, readingFontSize, dpr]
+    );
+    // The LCD emboss is a *separate* switch: even on a sharp panel a very
+    // small font maps a design pixel onto only two device pixels, where the
+    // one-device-pixel ghost lands halfway through the neighbouring cell and
+    // thickens every stroke. It needs >= 300 ppi *and* >= 3 device pixels per
+    // design pixel; otherwise only the dot-matrix background is kept.
+    // The canvas paints hard 1-bit edges, so it never needs either modifier.
+    const pixelEmboss = useMemo(
+      () => !pixelCanvas && isPixelFont && canEmbossPixelText(readingFontSize, dpr),
+      [pixelCanvas, isPixelFont, readingFontSize, dpr]
+    );
+    // Canvas mode can keep the LCD ghost on dense panels: the bands are
+    // phase-locked, so the one-device-pixel offset no longer depends on the
+    // font landing on a whole device-pixel grid.
+    const pixelCanvasEmboss = useMemo(
+      () => pixelCanvas && canCanvasEmboss(readingFontSize, dpr),
+      [pixelCanvas, readingFontSize, dpr]
     );
 
     const fontClass = useMemo(() => {
-      // Retro handheld themes read in a dot-matrix face unless the user
-      // explicitly picked another pixel font already.
+      // The font-style picker is the single source of truth: themes never
+      // swap the typeface, they only change colours / the LCD background.
       let base = 'font-serif';
       switch (settings.fontFamily) {
         case 'serif':
@@ -748,18 +784,31 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
           base = 'font-pixel2';
           break;
       }
-      if (isPixelTheme && settings.fontFamily !== 'pixel1' && settings.fontFamily !== 'pixel2') {
-        base = settings.theme === 'gbp' ? 'font-gbp' : 'font-gba';
+      if (pixelCanvas) {
+        // Keep the exact same family stack as the DOM renderer. The overlay
+        // resolves each glyph with that stack's fallback order and rasterizes
+        // it on its own face's native grid (Press Start / Silkscreen at 8px,
+        // HanYi at 13px), so Latin keeps the selected pixel font while CJK
+        // still falls back to HanYi.
+        return `${base} hh-pixel-text`;
       }
       // `hh-pixel-text` turns off kerning / ligatures and keeps the glyphs
       // on the device pixel grid. `hh-pixel-snapped` additionally disables
-      // antialiasing + adds the LCD pixel shadow, but only when the font
-      // scale is a whole number of device pixels; otherwise fractional
-      // strokes would snap to alternately thin / thick 1–2px lines.
+      // antialiasing, but only on >= 300 ppi panels where the font scale is
+      // a whole number of device pixels; elsewhere fractional strokes would
+      // snap to alternately thin / thick 1–2px lines. `hh-pixel-embossed`
+      // adds the LCD ghost only when a design pixel is dense enough (see
+      // above).
+      const modifiers = [
+        pixelCrisp ? 'hh-pixel-snapped' : '',
+        pixelEmboss ? 'hh-pixel-embossed' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
       return isPixelFont
-        ? `${base} hh-pixel-text${pixelCrisp ? ' hh-pixel-snapped' : ''}`
+        ? `${base} hh-pixel-text${modifiers ? ` ${modifiers}` : ''}`
         : base;
-    }, [settings.theme, settings.fontFamily, isPixelTheme, isPixelFont, pixelCrisp]);
+    }, [settings.fontFamily, isPixelFont, pixelCanvas, pixelCrisp, pixelEmboss]);
 
     const readingLineHeight = useMemo(() => {
       if (!isPixelFont) return settings.lineHeight;
@@ -773,8 +822,11 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
     const pixelHeadingSize = useMemo(() => {
       if (!isPixelFont) return 0;
       const target = Math.max(readingFontSize, settings.fontSize * 1.35);
+      // Canvas mode can keep the proportional size; the overlay re-rasterizes
+      // the title from the same atlas at whatever scale the heading needs.
+      if (pixelCanvas) return target;
       return Math.max(readingFontSize, snapPixelFontSize(target, dpr));
-    }, [isPixelFont, readingFontSize, settings.fontSize, dpr]);
+    }, [isPixelFont, pixelCanvas, readingFontSize, settings.fontSize, dpr]);
 
     const marginClass = MARGIN_CLASS[settings.marginSize] || MARGIN_CLASS.balanced;
 
@@ -1209,6 +1261,9 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
                   marginSize={settings.marginSize}
                   animation={animationKind}
                   speedMs={settings.pageTurnSpeedMs}
+                  pixelCanvas={pixelCanvas}
+                  pixelLcdGhost={pixelCanvasEmboss}
+                  canvasRepaintKey={`${settings.theme}|${fontClass}|${readingFontSize}|${readingLineHeight}|${dpr}`}
                   onPageCountChange={handlePageCountChange}
                 />
               )

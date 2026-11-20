@@ -11,28 +11,68 @@
 /** Design pixels per em for the bundled HanYi pixel face. */
 export const PIXEL_EM_PX = 13;
 
-/** Below this density the nearest whole-design-pixel step (13px) is too
- *  coarse, so we allow half steps (6.5px) and let grayscale AA even out the
- *  remaining half-pixel. */
-const MIN_SNAP_DPR = 1.5;
+/** Retina-class panels only. On anything below ~300 ppi a one-device-pixel
+ *  ghost is physically too coarse and the snapped strokes gain visible
+ *  weight, so the theme keeps its dot-matrix background but drops the
+ *  sharpening pass entirely. */
+const MIN_SHARPEN_PPI = 300;
+
+/** Nominal CSS pixels per inch for the current platform. `devicePixelRatio`
+ *  is reported relative to this value on Android (density = dpi / 160) and
+ *  iOS (pt = 1/163 in); desktop scaling factors are mapped to the classic
+ *  96–113 ppi panels, which keeps Retina monitors below the 300 ppi gate. */
+function platformCssPpi(): number {
+  if (typeof navigator === 'undefined') return 160;
+  const ua = navigator.userAgent;
+  const touchPoints = navigator.maxTouchPoints ?? 0;
+  const iPadUA = /Macintosh/i.test(ua) && touchPoints > 1;
+  if (/Android/i.test(ua)) return 160;
+  if (/iPhone|iPad|iPod/i.test(ua) || iPadUA) return 163;
+  if (/Macintosh/i.test(ua)) return 113;
+  return 96;
+}
 
 /**
- * Returns the closest font size that maps the pixel font's em onto a clean
- * device-pixel grid:
+ * Estimated physical pixel density of the display.
  *
- * - DPR >= 1.5: one design pixel = a whole device pixel, e.g. 18px at DPR 2
- *   becomes 19.5px (39 device pixels, 3 device px per design pixel).
- * - DPR < 1.5: one design pixel = half a device pixel, e.g. 18px at DPR 1
- *   becomes 19.5px (1.5 device px per design pixel). Every stroke then has
- *   the same 1.5px coverage instead of alternating 1px / 2px widths.
+ * The web platform never exposes the panel diagonal, but the platform CSS
+ * baseline turns `devicePixelRatio` into a good ppi estimate. On Android
+ * dpr 1 ≈ 160 ppi (320x240 / 640x480 handhelds), dpr 2 ≈ 320 ppi and
+ * dpr 3 ≈ 480 ppi; Retina desktop monitors land around 220–260 ppi.
+ */
+export function estimateScreenPpi(dpr: number): number {
+  const density = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  return density * platformCssPpi();
+}
+
+/**
+ * True when the panel is dense enough (>= 300 ppi) for the dot-matrix
+ * sharpening + LCD emboss. Lower-density screens keep the pixel face and
+ * the LCD background/grain, rendered with normal grayscale antialiasing.
+ */
+export function canSharpenPixelText(dpr: number): boolean {
+  return estimateScreenPpi(dpr) >= MIN_SHARPEN_PPI;
+}
+
+/**
+ * Returns the closest font size that maps the pixel font's em onto a whole
+ * number of *device* pixels per design pixel, e.g. 18px at DPR 2 becomes
+ * 19.5px (39 device pixels, exactly 3 per design pixel).
+ *
+ * This snap is independent of panel density. At 1.386 device pixels per
+ * design pixel (18px on a 1x screen) every 1px stroke is split across two
+ * raster rows with a different coverage split per stroke, which reads as
+ * uneven stroke weight even though the outline itself is uniform. Only
+ * 13/26/39… device pixels per em keep all strokes identical, so the size
+ * must be snapped on low-ppi panels too. Whether antialiasing is disabled
+ * and the LCD ghost is added is a separate, ppi-gated decision.
  */
 export function snapPixelFontSize(size: number, dpr: number): number {
   if (!Number.isFinite(size) || size <= 0) return size;
   const density = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
 
-  const step = density >= MIN_SNAP_DPR ? PIXEL_EM_PX : PIXEL_EM_PX / 2;
-  const steps = Math.max(1, Math.round((size * density) / step));
-  return Math.round(((steps * step) / density) * 100) / 100;
+  const steps = Math.max(1, Math.round((size * density) / PIXEL_EM_PX));
+  return Math.round(((steps * PIXEL_EM_PX) / density) * 100) / 100;
 }
 
 /**
@@ -46,6 +86,41 @@ export function isPixelCrisp(fontSize: number, dpr: number): boolean {
   if (!Number.isFinite(fontSize) || fontSize <= 0) return false;
   const designPx = (fontSize * density) / PIXEL_EM_PX;
   return Math.abs(designPx - Math.round(designPx)) < 0.01;
+}
+
+/** Minimum device pixels per design pixel required by the LCD emboss.
+ *
+ *  The ghost is always offset by exactly one device pixel. At two device
+ *  pixels per design pixel that is a full half-cell, so every stroke gains
+ *  one extra pixel on its bottom/right edge and dense glyphs lose their
+ *  counters — the uneven weight seen on 320x240 / 640x480 panels. At three
+ *  or more the offset stays a fraction of a cell and only tints the edge. */
+const MIN_EMBOSS_DEVICE_PX = 3;
+
+/**
+ * True when the LCD emboss (a one-device-pixel ghost under every lit pixel)
+ * can be added without visibly changing the stroke weight. Needs both a
+ * point-to-point size and enough device pixels inside each design pixel.
+ */
+export function canEmbossPixelText(fontSize: number, dpr: number): boolean {
+  if (!canSharpenPixelText(dpr) || !isPixelCrisp(fontSize, dpr)) return false;
+  const density = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  const designPx = (fontSize * density) / PIXEL_EM_PX;
+  return designPx >= MIN_EMBOSS_DEVICE_PX - 0.01;
+}
+
+/**
+ * Canvas variant of the emboss gate. The overlay already snaps every stroke
+ * band, so the size does not have to land on whole device pixels; only the
+ * panel density and the number of device pixels inside one design pixel
+ * still decide whether a one-device-pixel ghost stays an edge tint.
+ */
+export function canCanvasEmboss(fontSize: number, dpr: number): boolean {
+  if (!canSharpenPixelText(dpr)) return false;
+  const density = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+  if (!Number.isFinite(fontSize) || fontSize <= 0) return false;
+  const designPx = (fontSize * density) / PIXEL_EM_PX;
+  return designPx >= MIN_EMBOSS_DEVICE_PX - 0.01;
 }
 
 /** LCD cell size in CSS px: one cell per font design pixel, but never

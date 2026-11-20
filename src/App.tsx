@@ -34,6 +34,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.7,
   fontFamily: 'serif',
+  pixelCanvas: true,
   theme: 'oled',
   readingMode: 'paginated',
   distractionFree: false,

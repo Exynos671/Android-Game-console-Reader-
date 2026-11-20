@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import {
   X,
   Type,
@@ -52,6 +52,16 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
 }) => {
   const { t, lang, setLang } = useI18n();
   const dpr = useDevicePixelRatio();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // The panel's DOM is removed while the drawer is closed, so the offset is
+  // kept on the component instance and restored before the first paint on
+  // reopen — otherwise every open jumps back to the top of the list.
+  const savedScrollTop = useRef(0);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    if (scrollRef.current) scrollRef.current.scrollTop = savedScrollTop.current;
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -148,8 +158,12 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
       onClick={onClose}
     >
       <div
+        ref={scrollRef}
         className="bg-neutral-900 border-l border-neutral-800 w-full max-w-sm h-full flex flex-col shadow-2xl text-neutral-100 overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
+        onScroll={(e) => {
+          savedScrollTop.current = e.currentTarget.scrollTop;
+        }}
       >
         {/* Header */}
         <div

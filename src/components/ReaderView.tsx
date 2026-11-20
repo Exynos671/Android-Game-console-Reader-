@@ -1004,20 +1004,10 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
           />
 
           {/* GBA big-pixel LCD grain (theme) */}
-          {isGba && (
-            <>
-              <div className="hh-gba-pixels" />
-              <div className="hh-gba-vignette" />
-            </>
-          )}
+          {isGba && <div className="hh-gba-pixels" />}
 
           {/* Game Boy Pocket fine grey dot-matrix grain (theme) */}
-          {isGbp && (
-            <>
-              <div className="hh-gbp-pixels" />
-              <div className="hh-gbp-vignette" />
-            </>
-          )}
+          {isGbp && <div className="hh-gbp-pixels" />}
 
           {/* Non-blocking hint (never covers the text area) */}
           {activeHint && (

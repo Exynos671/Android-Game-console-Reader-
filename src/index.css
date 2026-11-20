@@ -385,35 +385,6 @@ body {
 .hh-gbp-pixels {
   --hh-lcd-ink: rgba(38, 43, 36, var(--hh-lcd-ink-alpha, 0.13));
 }
-.hh-gba-vignette {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: 26;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(255, 255, 255, 0) 55%,
-    rgba(15, 56, 15, 0.28) 100%
-  );
-  mix-blend-mode: multiply;
-}
-
-/* ============================================================
-   Game Boy Pocket vignette — grey reflective LCD corners.
-   ============================================================ */
-.hh-gbp-vignette {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: 26;
-  background: radial-gradient(
-    ellipse at center,
-    rgba(255, 255, 255, 0) 58%,
-    rgba(45, 50, 42, 0.22) 100%
-  );
-  mix-blend-mode: multiply;
-}
-
 /* ============================================================
    Page-curl (缈讳功鎻) animation helpers 鈥?most motion is inline
    JS (imperative overlay), these are just the decorative bits.

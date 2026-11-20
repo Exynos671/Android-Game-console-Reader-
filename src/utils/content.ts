@@ -5,6 +5,9 @@
  * otherwise newlines collapse and the book renders as one blob.
  */
 
+/** Characters that make up dense CJK prose (Han, kana, compatibility ideographs). */
+const CJK_CHAR_GLOBAL = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g;
+
 export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -20,20 +23,62 @@ export function isHtmlContent(content: string): boolean {
 }
 
 /**
+ * True when the text is mostly CJK characters. Such books (Chinese web
+ * novels in particular) put one paragraph per line, so a plain newline is a
+ * paragraph break rather than a soft wrap.
+ */
+export function isCjkDominant(text: string): boolean {
+  const cjk = text.match(CJK_CHAR_GLOBAL)?.length ?? 0;
+  if (cjk < 4) return false;
+  const visible = text.replace(/\s+/g, '').length;
+  return visible > 0 && cjk / visible >= 0.2;
+}
+
+/** Count CJK characters plus whitespace-separated Latin words. */
+export function countWords(text: string): number {
+  if (!text) return 0;
+  const cjk = text.match(CJK_CHAR_GLOBAL)?.length ?? 0;
+  const latin = text
+    .replace(CJK_CHAR_GLOBAL, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+  return Math.max(1, cjk + latin);
+}
+
+/**
  * Convert plain text into simple, readable HTML paragraphs.
- * Blocks are separated by one or more blank lines; single line breaks
- * inside a block become spaces.
+ *
+ * Blank lines always separate paragraphs. Inside a paragraph a single
+ * newline is treated differently per script:
+ * - CJK prose: every line is its own paragraph (one-paragraph-per-line is
+ *   the convention for Chinese novels, and hard wrapping is rare).
+ * - Latin prose: a single newline is a soft wrap and becomes a space.
  */
 export function textToHtml(text: string): string {
-  const blocks = text
-    .split(/\r?\n\s*\r?\n/)
-    .map((b) => b.replace(/\r?\n+/g, ' ').trim())
-    .filter(Boolean);
+  const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n');
+  if (!normalized.trim()) return '';
 
-  if (blocks.length === 0) {
-    return '';
+  let paragraphs: string[];
+  if (isCjkDominant(normalized)) {
+    paragraphs = normalized.split('\n');
+  } else {
+    paragraphs = normalized
+      .split(/\n[ \t\u00a0\u3000]*\n+/)
+      .map((block) =>
+        block
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .join(' ')
+      );
   }
-  return blocks.map((b) => `<p>${escapeHtml(b)}</p>`).join('\n');
+
+  return paragraphs
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join('\n');
 }
 
 /**

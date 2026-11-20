@@ -53,18 +53,77 @@ body {
   font-weight: 400;
   font-display: swap;
 }
+/* Press Start 2P / Silkscreen only ship Latin glyphs, so Chinese characters
+   must fall through to the bundled HanYi pixel face instead of a smooth CJK
+   font — otherwise the "dot-matrix" options look like normal text. */
 .font-pixel1 {
-  font-family: 'Press Start 2P', 'Silkscreen', 'Noto Sans SC', 'Microsoft YaHei', monospace;
+  font-family: 'Press Start 2P', 'Silkscreen', 'HanYi Pixel 11', 'Noto Sans SC',
+    'Microsoft YaHei', monospace;
   letter-spacing: 0.02em;
 }
 .font-pixel2 {
-  font-family: 'Silkscreen', 'Press Start 2P', 'Noto Sans SC', 'Microsoft YaHei', monospace;
+  font-family: 'Silkscreen', 'Press Start 2P', 'HanYi Pixel 11', 'Noto Sans SC',
+    'Microsoft YaHei', monospace;
   letter-spacing: 0.02em;
 }
-/* Chinese pixel face used by the GBA theme by default */
-.font-gba {
+/* Chinese pixel face used by the retro handheld themes by default */
+.font-gba,
+.font-gbp {
   font-family: 'HanYi Pixel 11', 'Silkscreen', 'Press Start 2P', 'Noto Sans SC', monospace;
   letter-spacing: 0.02em;
+}
+
+/* ============================================================
+   Dot-matrix typography.
+   The pixel faces are only razor sharp when each design pixel
+   maps onto whole device pixels, so smoothing / kerning /
+   fractional letter-spacing are switched off and the reading
+   font size is snapped to the face's em grid in JS.
+   ============================================================ */
+.hh-pixel-text {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  font-feature-settings: 'kern' 0, 'liga' 0, 'clig' 0, 'calt' 0;
+  font-synthesis: none;
+  letter-spacing: 0;
+}
+/* Only applied when the snapped size maps a design pixel onto a whole
+   number of device pixels; then AA can be switched off safely. On 1x
+   screens the remaining half-pixel is left to grayscale AA so strokes keep
+   a uniform weight instead of alternating 1px / 2px. */
+.hh-pixel-snapped {
+  -webkit-font-smoothing: none;
+  /* Faint ghost one *physical* pixel below / right of every lit pixel,
+     like a reflective LCD cell. The offset variable is set from the
+     reader's devicePixelRatio, so it is exactly one screen pixel. */
+  text-shadow:
+    0 var(--hh-lcd-px, 0.5px) 0 var(--hh-lcd-ghost, transparent),
+    var(--hh-lcd-px, 0.5px) var(--hh-lcd-px, 0.5px) 0
+      var(--hh-lcd-ghost-soft, transparent);
+}
+/* Chapter titles are rem-sized by the generated HTML; give the LCD
+   themes a grid-aligned size (set from ReaderView) instead. */
+.hh-pixel-text h1,
+.hh-pixel-text h2,
+.hh-pixel-text h3,
+.hh-pixel-text h4 {
+  font-size: var(--hh-pixel-heading, 1.5em);
+  letter-spacing: 0;
+}
+.hh-pixel-text .tracking-tight {
+  letter-spacing: 0;
+}
+
+.hh-lcd-ghost-gba {
+  --hh-lcd-ghost: rgba(15, 56, 15, 0.34);
+  --hh-lcd-ghost-soft: rgba(15, 56, 15, 0.15);
+}
+.hh-lcd-ghost-gbp {
+  --hh-lcd-ghost: rgba(43, 47, 40, 0.32);
+  --hh-lcd-ghost-soft: rgba(43, 47, 40, 0.14);
 }
 
 /* Safe-area helper utilities.
@@ -275,19 +334,38 @@ body {
 }
 
 /* ============================================================
-   GBA screen theme 鈥?big chunky "LCD" pixel grain overlay
+   GBA / GBP LCD panel grain.
+   A real dot-matrix panel is a continuous mesh: one dark gap
+   between every two pixel cells, not isolated dots. The cell
+   pitch comes from the reading font (one cell per font design
+   pixel, see `lcdCellSize`) so the grain matches the stroke
+   grid, and both lines are exactly one *device* pixel wide.
    ============================================================ */
-.hh-gba-pixels {
+.hh-gba-pixels,
+.hh-gbp-pixels {
   pointer-events: none;
   position: absolute;
   inset: 0;
   z-index: 25;
   background-image:
-    linear-gradient(rgba(15, 56, 15, 0.16) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 56, 15, 0.16) 1px, transparent 1px);
-  background-size: 2px 2px;
+    linear-gradient(
+      to right,
+      var(--hh-lcd-ink) 0 var(--hh-lcd-px, 0.5px),
+      transparent var(--hh-lcd-px, 0.5px)
+    ),
+    linear-gradient(
+      to bottom,
+      var(--hh-lcd-ink) 0 var(--hh-lcd-px, 0.5px),
+      transparent var(--hh-lcd-px, 0.5px)
+    );
+  background-size: var(--hh-lcd-cell, 4px) var(--hh-lcd-cell, 4px);
   mix-blend-mode: multiply;
-  opacity: 0.55;
+}
+.hh-gba-pixels {
+  --hh-lcd-ink: rgba(15, 56, 15, var(--hh-lcd-ink-alpha, 0.13));
+}
+.hh-gbp-pixels {
+  --hh-lcd-ink: rgba(38, 43, 36, var(--hh-lcd-ink-alpha, 0.13));
 }
 .hh-gba-vignette {
   pointer-events: none;
@@ -298,6 +376,22 @@ body {
     ellipse at center,
     rgba(255, 255, 255, 0) 55%,
     rgba(15, 56, 15, 0.28) 100%
+  );
+  mix-blend-mode: multiply;
+}
+
+/* ============================================================
+   Game Boy Pocket vignette — grey reflective LCD corners.
+   ============================================================ */
+.hh-gbp-vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 26;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 255, 255, 0) 58%,
+    rgba(45, 50, 42, 0.22) 100%
   );
   mix-blend-mode: multiply;
 }

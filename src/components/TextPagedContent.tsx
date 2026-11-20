@@ -6,6 +6,8 @@ import React, {
   useState,
 } from 'react';
 import { PageTurnAnimation } from '../types';
+import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio';
+import { snapDevicePx } from '../utils/pixelFont';
 
 export type PageTurnAnimationKind = PageTurnAnimation;
 export type PageMarginSize = 'compact' | 'balanced' | 'relaxed';
@@ -18,6 +20,8 @@ export interface TextPagedContentProps {
   fontSize: number;
   lineHeight: number;
   fontFamilyClass: string;
+  /** Keep columns, insets and offsets on whole device pixels (dot-matrix text). */
+  pixelPerfect?: boolean;
   marginSize: PageMarginSize;
   animation: PageTurnAnimationKind;
   /** Duration of the slide / fade animation in ms. */
@@ -46,12 +50,14 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
   fontSize,
   lineHeight,
   fontFamilyClass,
+  pixelPerfect = false,
   marginSize,
   animation,
   speedMs = 500,
   onPageCountChange,
 }) => {
   const rootRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLSpanElement>(null);
 
@@ -61,7 +67,13 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
   const htmlRef = useRef(html);
   const measureRafRef = useRef<number | null>(null);
 
+  const dpr = useDevicePixelRatio();
+
   const margins = MARGINS[marginSize];
+  // The sheet is clipped by an inset viewport; landing it (and the column
+  // width) on whole device pixels is what keeps dot-matrix text sharp.
+  const insetX = pixelPerfect ? snapDevicePx(margins.x, dpr) : margins.x;
+  const insetY = pixelPerfect ? snapDevicePx(margins.y, dpr) : margins.y;
 
   useEffect(() => {
     pageRef.current = page;
@@ -81,9 +93,22 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
     const rawH = root.clientHeight;
     if (rawW < 40 || rawH < 40) return false;
 
-    const contentW = Math.max(40, Math.floor(rawW - margins.x * 2));
-    const contentH = Math.max(40, Math.floor(rawH - margins.y * 2));
+    // Pixel fonts only stay crisp when the column width and page insets are
+    // whole device pixels; for normal text the classic integer CSS px maths
+    // is kept unchanged.
+    const unit = pixelPerfect ? dpr : 1;
+    const contentW = Math.max(40, Math.floor((rawW - insetX * 2) * unit) / unit);
+    const contentH = Math.max(40, Math.floor((rawH - insetY * 2) * unit) / unit);
     if (!contentW || !contentH) return false;
+
+    // Clip to the exact snapped page box, otherwise the <1px difference
+    // between the inset viewport and the floored column width could let a
+    // sliver of the neighbouring column peek through.
+    const viewport = viewportRef.current;
+    if (viewport) {
+      viewport.style.width = `${contentW}px`;
+      viewport.style.height = `${contentH}px`;
+    }
 
     const prevTransition = sheet.style.transition;
     sheet.style.transition = 'none';
@@ -118,7 +143,7 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
     measuredOnceRef.current = true;
     setPageCount((prev) => (prev !== count ? count : prev));
     return true;
-  }, [html, fontSize, lineHeight, fontFamilyClass, margins.x, margins.y]);
+  }, [html, fontSize, lineHeight, fontFamilyClass, insetX, insetY, dpr, pixelPerfect]);
 
   const runMeasurement = useCallback(() => {
     let attempts = 0;
@@ -237,12 +262,13 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
       {/* Single-page viewport: inset by the page margins and strictly
           clipped, so adjacent columns can never show at the screen edges. */}
       <div
+        ref={viewportRef}
         className="absolute overflow-hidden"
         style={{
-          left: margins.x,
-          top: margins.y,
-          right: margins.x,
-          bottom: margins.y,
+          left: insetX,
+          top: insetY,
+          right: insetX,
+          bottom: insetY,
         }}
       >
         <div

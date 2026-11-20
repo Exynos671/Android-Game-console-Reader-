@@ -28,6 +28,14 @@ import { TextPagedContent, PageMarginSize } from './TextPagedContent';
 import { ImageViewPage, ImagePreviewModal, extractImagePage } from './ImageViewPage';
 import { normalizeChapterToHtml, escapeHtml } from '../utils/content';
 import { useSystemStatus } from '../hooks/useSystemStatus';
+import { useDevicePixelRatio } from '../hooks/useDevicePixelRatio';
+import {
+  snapPixelFontSize,
+  snapPixelLineHeight,
+  isPixelCrisp,
+  lcdCellSize,
+  lcdInkAlpha,
+} from '../utils/pixelFont';
 import { useI18n } from '../i18n';
 
 export interface ReaderViewHandle {
@@ -92,6 +100,13 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
     const { t, tf } = useI18n();
     const contentContainerRef = useRef<HTMLDivElement>(null);
 
+    // Dot-matrix typography depends on the physical pixel density: the
+    // reading size is snapped so one font pixel = whole device pixels.
+    const dpr = useDevicePixelRatio();
+    const isPixelTheme = settings.theme === 'gba' || settings.theme === 'gbp';
+    const isPixelFont =
+      isPixelTheme || settings.fontFamily === 'pixel1' || settings.fontFamily === 'pixel2';
+
     // Reading chrome (top bar + bottom controls). Clean by default 鈥?page
     // turns never pop menus open; only Start / screen tap toggles it.
     const [hudVisible, setHudVisible] = useState(false);
@@ -135,6 +150,10 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
       const target = Math.max(0, book.readerPage ?? 0);
       setSubPage(target);
       desiredPageRef.current = target > 0 ? target : null;
+      // The page count still belongs to the chapter we just left. Keep it at
+      // one page until the new column layout reports its real count, so a
+      // fast next-page press can never advance into phantom pages.
+      setTextPageCount(1);
     }
 
     const pageCountCacheRef = useRef<Record<number, number>>({});
@@ -351,7 +370,14 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
       }, 260);
       return () => window.clearTimeout(timer);
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [settings.fontSize, settings.lineHeight, settings.marginSize, settings.fontFamily]);
+    }, [
+      settings.fontSize,
+      settings.lineHeight,
+      settings.marginSize,
+      settings.fontFamily,
+      dpr,
+      isPixelFont,
+    ]);
 
     const onBookProbeCount = useCallback(
       (chapter: number, count: number) => {
@@ -676,14 +702,30 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
           return 'bg-[#142314] text-[#88c070] font-mono';
         case 'gba':
           // Classic lit GBA LCD: washed green screen + dark ink.
-          return 'bg-[#9bbc0f] text-[#0f380f]';
+          return 'bg-[#9bbc0f] text-[#0f380f] hh-lcd-ghost-gba';
+        case 'gbp':
+          // Game Boy Pocket: reflective grey LCD with charcoal ink.
+          return 'bg-[#b8bcb0] text-[#2b2f28] hh-lcd-ghost-gbp';
         default:
           return 'bg-black text-neutral-200';
       }
     }, [settings.theme]);
 
+    // Dot-matrix text is drawn on a fixed grid, so an arbitrary font size
+    // (e.g. 18px at DPR 2.75) makes every glyph edge fall between device
+    // pixels and the browser blurs it. Snap to the nearest grid step and
+    // keep line boxes on whole device pixels as well.
+    const readingFontSize = useMemo(
+      () => (isPixelFont ? snapPixelFontSize(settings.fontSize, dpr) : settings.fontSize),
+      [isPixelFont, settings.fontSize, dpr]
+    );
+    const pixelCrisp = useMemo(
+      () => isPixelFont && isPixelCrisp(readingFontSize, dpr),
+      [isPixelFont, readingFontSize, dpr]
+    );
+
     const fontClass = useMemo(() => {
-      // GBA theme automatically reads in a dot-matrix face unless the user
+      // Retro handheld themes read in a dot-matrix face unless the user
       // explicitly picked another pixel font already.
       let base = 'font-serif';
       switch (settings.fontFamily) {
@@ -706,15 +748,33 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
           base = 'font-pixel2';
           break;
       }
-      if (
-        settings.theme === 'gba' &&
-        settings.fontFamily !== 'pixel1' &&
-        settings.fontFamily !== 'pixel2'
-      ) {
-        return 'font-gba';
+      if (isPixelTheme && settings.fontFamily !== 'pixel1' && settings.fontFamily !== 'pixel2') {
+        base = settings.theme === 'gbp' ? 'font-gbp' : 'font-gba';
       }
-      return base;
-    }, [settings.theme, settings.fontFamily]);
+      // `hh-pixel-text` turns off kerning / ligatures and keeps the glyphs
+      // on the device pixel grid. `hh-pixel-snapped` additionally disables
+      // antialiasing + adds the LCD pixel shadow, but only when the font
+      // scale is a whole number of device pixels; otherwise fractional
+      // strokes would snap to alternately thin / thick 1–2px lines.
+      return isPixelFont
+        ? `${base} hh-pixel-text${pixelCrisp ? ' hh-pixel-snapped' : ''}`
+        : base;
+    }, [settings.theme, settings.fontFamily, isPixelTheme, isPixelFont, pixelCrisp]);
+
+    const readingLineHeight = useMemo(() => {
+      if (!isPixelFont) return settings.lineHeight;
+      // Store the snapped value back as a unitless multiplier so the CSS
+      // `line-height` resolves to a whole number of device pixels.
+      const px = snapPixelLineHeight(readingFontSize, settings.lineHeight, dpr);
+      return px / readingFontSize;
+    }, [isPixelFont, readingFontSize, settings.lineHeight, dpr]);
+    // Chapter headings are set in rem by the generated HTML; give the LCD
+    // themes a grid-aligned size instead so titles stay crisp too.
+    const pixelHeadingSize = useMemo(() => {
+      if (!isPixelFont) return 0;
+      const target = Math.max(readingFontSize, settings.fontSize * 1.35);
+      return Math.max(readingFontSize, snapPixelFontSize(target, dpr));
+    }, [isPixelFont, readingFontSize, settings.fontSize, dpr]);
 
     const marginClass = MARGIN_CLASS[settings.marginSize] || MARGIN_CLASS.balanced;
 
@@ -852,9 +912,11 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
           ? '#44403c'
           : settings.theme === 'gba'
             ? '#0f380f'
-            : settings.theme === 'retro'
-              ? '#88c070'
-              : '#d4d4d8';
+            : settings.theme === 'gbp'
+              ? '#2b2f28'
+              : settings.theme === 'retro'
+                ? '#88c070'
+                : '#d4d4d8';
 
     // Minimum edge margin so content never hugs the physical screen border,
     // even on handhelds that report no safe-area insets.
@@ -880,6 +942,21 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
               : edgeBottom,
         };
 
+    // Grid-aligned heading size for the dot-matrix themes (consumed by the
+    // `.hh-pixel-text h1…h4` rules in index.css). `--hh-lcd-px` is one
+    // physical device pixel, used for the LCD pixel shadow offset, and
+    // `--hh-lcd-cell` is one font design pixel, used as the LCD cell pitch.
+    const lcdStyle = {
+      '--hh-lcd-px': `${1 / (dpr || 1)}px`,
+      '--hh-lcd-cell': `${lcdCellSize(isPixelFont ? readingFontSize : 0, dpr)}px`,
+      '--hh-lcd-ink-alpha': lcdInkAlpha(dpr).toFixed(3),
+    } as React.CSSProperties;
+    const canvasStyle = {
+      ...canvasPadStyle,
+      ...lcdStyle,
+      ...(pixelHeadingSize ? { '--hh-pixel-heading': `${pixelHeadingSize}px` } : {}),
+    } as React.CSSProperties;
+
     const animationKind = settings.pageTurnAnimation as PageTurnAnimation;
 
     // The visible hint chip combines App-level hints (double-press B to
@@ -887,6 +964,7 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
     const activeHint = backHint || localHint;
 
     const isGba = settings.theme === 'gba';
+    const isGbp = settings.theme === 'gbp';
 
     /* ================================================================== */
     /*  Render 鈥?full-bleed single page (no aspect-ratio letterboxing)     */
@@ -899,6 +977,7 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
         data-hh-paged={isPagedText ? 1 : 0}
         data-hh-rp={book.readerPage ?? -1}
         className="relative w-full h-full overflow-hidden bg-black select-none"
+        style={lcdStyle}
       >
         {/* Full-screen display surface */}
         <div className="relative w-full h-full overflow-hidden">
@@ -924,6 +1003,14 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
             <>
               <div className="hh-gba-pixels" />
               <div className="hh-gba-vignette" />
+            </>
+          )}
+
+          {/* Game Boy Pocket fine grey dot-matrix grain (theme) */}
+          {isGbp && (
+            <>
+              <div className="hh-gbp-pixels" />
+              <div className="hh-gbp-vignette" />
             </>
           )}
 
@@ -1067,7 +1154,7 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
             className={`w-full h-full relative flex flex-col items-center read-canvas ${
               isPagedCanvas ? 'overflow-hidden' : 'overflow-y-auto no-scrollbar'
             } ${themeClass}`}
-            style={canvasPadStyle}
+            style={canvasStyle}
             onClick={handleCanvasClick}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
@@ -1120,9 +1207,10 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
                   key={`${book.id}-${book.currentChapterIndex}`}
                   page={subPage}
                   html={pagedHtml}
-                  fontSize={settings.fontSize}
-                  lineHeight={settings.lineHeight}
+                  fontSize={readingFontSize}
+                  lineHeight={readingLineHeight}
                   fontFamilyClass={fontClass}
+                  pixelPerfect={isPixelFont}
                   marginSize={settings.marginSize}
                   animation={animationKind}
                   speedMs={settings.pageTurnSpeedMs}
@@ -1144,8 +1232,8 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
               <div
                 className={`w-full mx-auto ${marginClass} ${fontClass} leading-relaxed transition-all hh-cont-img-${settings.imageViewMode}`}
                 style={{
-                  fontSize: `${settings.fontSize}px`,
-                  lineHeight: settings.lineHeight,
+                  fontSize: `${readingFontSize}px`,
+                  lineHeight: readingLineHeight,
                 }}
               >
                 {currentChapter && (
@@ -1199,9 +1287,10 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
                 key={`hidden-${measureRequest.nonce}`}
                 page={0}
                 html={hiddenHtml}
-                fontSize={settings.fontSize}
-                lineHeight={settings.lineHeight}
+                fontSize={readingFontSize}
+                lineHeight={readingLineHeight}
                 fontFamilyClass={fontClass}
+                pixelPerfect={isPixelFont}
                 marginSize={settings.marginSize}
                 animation="instant"
                 onPageCountChange={(c) => {
@@ -1230,9 +1319,10 @@ export const ReaderView = forwardRef<ReaderViewHandle, ReaderViewProps>(
                 key={`bookprobe-${bookProbe.nonce}`}
                 page={0}
                 html={probeHtml}
-                fontSize={settings.fontSize}
-                lineHeight={settings.lineHeight}
+                fontSize={readingFontSize}
+                lineHeight={readingLineHeight}
                 fontFamilyClass={fontClass}
+                pixelPerfect={isPixelFont}
                 marginSize={settings.marginSize}
                 animation="instant"
                 onPageCountChange={(c) => {

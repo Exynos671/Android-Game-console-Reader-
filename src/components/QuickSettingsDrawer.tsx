@@ -98,6 +98,13 @@ export const QuickSettingsDrawer: React.FC<QuickSettingsDrawerProps> = ({
       text: 'text-[#0f380f]',
       desc: t('settings.themeGbaDesc'),
     },
+    {
+      id: 'gbp',
+      label: t('settings.themeGbp'),
+      bg: 'bg-[#b8bcb0] border-neutral-500',
+      text: 'text-[#2b2f28]',
+      desc: t('settings.themeGbpDesc'),
+    },
   ];
 
   const fonts: { id: ReaderSettings['fontFamily']; label: string }[] = [

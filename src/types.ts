@@ -1,6 +1,6 @@
 export type BookFormat = 'txt' | 'epub' | 'pdf' | 'cbz' | 'mobi';
 
-export type ReaderTheme = 'oled' | 'dark' | 'sepia' | 'paper' | 'retro' | 'gba';
+export type ReaderTheme = 'oled' | 'dark' | 'sepia' | 'paper' | 'retro' | 'gba' | 'gbp';
 
 export type ReadingMode = 'paginated' | 'continuous' | 'manga_rtl' | 'webtoon';
 
@@ -114,6 +114,8 @@ export interface Book {
   measuredChapterPages?: number[];
   /** Cached count of chapters whose reflowed pages have been measured. */
   measuredChapterCount?: number;
+  /** Revision of the plain-text parser that produced `chapters` (TXT books). */
+  parserRevision?: number;
 }
 
 export interface ReaderSettings {

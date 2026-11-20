@@ -280,10 +280,16 @@ export const TextPagedContent: React.FC<TextPagedContentProps> = ({
           }}
         >
           <div dangerouslySetInnerHTML={{ __html: html }} />
+          {/* Block-level end marker: an inline marker gets a full line box
+              (~line-height tall) even at the very top of a new column, so
+              a chapter that ended exactly at the bottom of a page was
+              counted as having one extra blank page. As a block it lands
+              at y = 0 in the next column, so the `y > 3` check in
+              `measure()` correctly counts only pages that hold text. */}
           <span
             ref={sentinelRef}
             aria-hidden="true"
-            style={{ display: 'inline-block', width: 1, height: 1 }}
+            style={{ display: 'block', width: 1, height: 1 }}
           />
         </div>
       </div>
